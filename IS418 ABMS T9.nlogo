@@ -1,149 +1,144 @@
-breed [stalls stall]
+globals [
+  seats
+]
 
+breed [ customers customer ]
+breed [ stalls stall ]
+
+customers-own [ target ]
+patches-own [ definition ]
 stalls-own [ stall-id ]
 
 to setup
-  ca
-  set-wall
-  set-tables
+  clear-all
+
+  setup-globals
+  setup-world-size
+  setup-wall
+  setup-tables
+  setup-stalls
+
   reset-ticks
 end
 
-
-to set-wall
-  ask patches with [pxcor = 35 or pxcor = -35 and pycor <= 35 and pycor >= 15] ; breakage of walls to serve as an entrance (y-coords)
-  [set pcolor blue]
-  ask patches with [pxcor = 35 or pxcor = -35 and pycor <= -10 and pycor >= -35] ; breakage of walls to serve as an entrance (y-coords)
-  [set pcolor blue]
-  ask patches with [pycor = 35 or pycor = -35 and pxcor <= 35 and pxcor >= -35]
-  [set pcolor blue]
+to setup-globals
+  set seats []
 end
 
-to set-tables
+to setup-world-size
+  set-patch-size 7
+  resize-world 0 61 0 61
+end
 
-  ask patches [
-    if (pycor > -30 and pycor < 30 and pxcor > -30 and pxcor < 30) [
-      if (pycor = -5 or pycor = -4 or pycor = -15 or pycor = -14 or pycor = -25 or pycor = -24 or pycor = 5 or pycor = 6 or pycor = 15 or pycor = 16 or pycor = 25 or pycor = 26) [
-
-        if (pxcor >= -28 and pxcor <= -27) or (pxcor >= -24 and pxcor <= -23) [ set-table-color ] ; col 1's first table in a grid (10x10) and second table in a grid (10x10)
-        if (pxcor >= -18 and pxcor <= -17) or (pxcor >= -14 and pxcor <= -13) [ set-table-color ] ; col 2
-        if (pxcor >= -8 and pxcor <= -7) or (pxcor >= -4 and pxcor <= -3) [ set-table-color ] ; col 3
-        if (pxcor >= 3 and pxcor <= 4) or (pxcor >= 7 and pxcor <= 8) [ set-table-color ] ; col 4
-        if (pxcor >= 13 and pxcor <= 14) or (pxcor >= 17 and pxcor <= 18) [ set-table-color ] ; col 5
-        if (pxcor >= 23 and pxcor <= 24) or (pxcor >= 27 and pxcor <= 28) [ set-table-color ] ; col 6
-      ]
-
-      ; construct seats
-      if (pycor = -6 or pycor = -3 or pycor = -16 or pycor = -13 or pycor = -26 or pycor = -23 or pycor = 4 or pycor = 7 or pycor = 14 or pycor = 17 or pycor = 24 or pycor = 27) [
-         if (pxcor >= -28 and pxcor <= -27) or (pxcor >= -24 and pxcor <= -23) [ set-seat-color ] ; col 1's first table in a grid (10x10) and second table in a grid (10x10)
-        if (pxcor >= -18 and pxcor <= -17) or (pxcor >= -14 and pxcor <= -13) [ set-seat-color ] ; col 2
-        if (pxcor >= -8 and pxcor <= -7) or (pxcor >= -4 and pxcor <= -3) [ set-seat-color ] ; col 3
-        if (pxcor >= 3 and pxcor <= 4) or (pxcor >= 7 and pxcor <= 8) [ set-seat-color ] ; col 4
-        if (pxcor >= 13 and pxcor <= 14) or (pxcor >= 17 and pxcor <= 18) [ set-seat-color ] ; col 5
-        if (pxcor >= 23 and pxcor <= 24) or (pxcor >= 27 and pxcor <= 28) [ set-seat-color ] ; col 6
-      ]
-
-
-      ; reset patch color around the stall to black (removal of tables in that area for the construction of stalls)
-      if (pxcor >= -10 and pxcor <= 10) and (pycor >= -10 and pycor <= 10) [
-        set-center-black
-      ]
-
-      ; Set up stalls
-      if (pxcor >= -7 and pxcor <= -5) [ ; left side of stalls
-        if (pycor >= 1 and pycor <= 7) [
-          set-stall-one
-        ]
-        if (pycor >= -5 and pycor <= 0) [
-          set-stall-two
-        ]
-      ]
-
-      if (pycor >= -8 and pycor <= -6) [ ; bottom stalls
-        if (pxcor >= -7 and pxcor <= -1) [
-          set-stall-three
-        ]
-        if (pxcor >= -1 and pxcor <= 6) [
-          set-stall-four
-        ]
-      ]
-
-      if (pxcor >= 4 and pxcor <= 6) [ ; right side of stalls
-        if (pycor >= 1 and pycor <= 7) [
-          set-stall-five
-        ]
-        if (pycor >= -5 and pycor <= 0) [
-          set-stall-six
-        ]
-      ]
-
-      if (pycor >= 8 and pycor <= 10) [ ; top stalls
-        if (pxcor >= -7 and pxcor <= -1) [
-          set-stall-seven
-        ]
-        if (pxcor >= -1 and pxcor <= 6) [
-          set-stall-eight
-        ]
-      ]
-    ]
+to setup-wall
+  ask patches with [pxcor > 2 and pxcor < 59 and pycor > 2 and pycor < 59] [
+    set pcolor 8
+  ]
+  ask patches with [pxcor = 2 or pxcor = 59 and pycor > 2 and pycor < 60] [ ; breakage of walls to serve as an entrance/exit (y-coords)
+    set pcolor blue
+  ]
+  ask patches with [pycor = 2 or pycor = 59 and pxcor > 2 and pxcor < 60] [
+    set pcolor blue
   ]
 
-
+  ; setup entrance and exit
+  ask patches with [pxcor = 2 and pycor >= 30 and pycor <= 33] [
+    set pcolor green
+  ]
+  ask patches with [pxcor = 59 and pycor >= 30 and pycor <= 33] [
+    set pcolor red
+  ]
 end
 
+to setup-stalls
+  ; Set up stalls
+  let top-ycor 58
+  let btm-ycor 7
+  let temp-xcor 3
+  while [ temp-xcor < 58 ] [
+    create-stall temp-xcor top-ycor
+    create-stall temp-xcor btm-ycor
+    set temp-xcor temp-xcor + 14
+  ]
+end
+
+to create-stall[input-xcor input-ycor]
+  ask patches [
+    if (pxcor >= input-xcor and pxcor <= input-xcor + 13 and pycor <= input-ycor and pycor >= input-ycor - 4) [
+      set-stall-color
+    ]
+
+    if ((pxcor = input-xcor or pxcor = input-xcor + 13) and pycor <= input-ycor and pycor >= input-ycor - 4) [
+      set pcolor white
+    ]
+    if ((pycor = input-ycor or pycor = input-ycor - 4) and pxcor >= input-xcor and pxcor <= input-xcor + 13) [
+      set pcolor white
+    ]
+  ]
+end
+
+to setup-tables
+  let counter 0
+  let temp-xcor 5
+  while [ temp-xcor < 57] [
+    let temp-ycor 11
+
+    while [ temp-ycor < 50 ] [
+      if (counter = number-of-tables) [
+        stop
+      ]
+      create-table temp-xcor temp-ycor
+      set temp-ycor temp-ycor + 7
+      set counter (counter + 1)
+    ]
+
+    set temp-xcor temp-xcor + 9
+  ]
+end
+
+to create-table[input-xcor input-ycor]
+  ask patches [
+    if ((pxcor = input-xcor + 1 or pxcor = input-xcor + 5) and (pycor = input-ycor + 1 or pycor = input-ycor + 3)) [
+      set-seat-color
+      set seats lput self seats
+      set definition "seat"
+    ]
+
+    if (pxcor >= input-xcor + 2 and pxcor <= input-xcor + 4 and pycor >= input-ycor and pycor <= input-ycor + 4) [
+      set-table-color
+      set definition "table"
+    ]
+  ]
+end
 
 to set-table-color ; change the color of the table
-  set pcolor grey
+  set pcolor 56
 end
 
 to set-seat-color ; change the color of the table
-  set pcolor white - 1
+  set pcolor brown
 end
 
 to set-center-black ; set patches around the stalls to black
   set pcolor black
 end
 
-to set-stall-one
-  set pcolor red
-end
-
-to set-stall-two
-  set pcolor green + 2
-end
-
-to set-stall-three
-  set pcolor orange
-end
-
-to set-stall-four
-  set pcolor blue
-end
-
-to set-stall-five
-  set pcolor yellow
-end
-
-to set-stall-six
-  set pcolor white
-end
-
-to set-stall-seven
-  set pcolor turquoise + 2
-end
-
-to set-stall-eight
+to set-stall-color
   set pcolor pink + 2
+end
+
+to go
+  print seats
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-1271
-1072
+652
+453
 -1
 -1
-13.0
+7.0
 1
 10
 1
@@ -153,10 +148,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--40
-40
--40
-40
+0
+61
+0
+61
 0
 0
 1
@@ -164,10 +159,10 @@ ticks
 30.0
 
 BUTTON
-105
-91
-169
-124
+74
+13
+138
+46
 Setup
 setup
 NIL
@@ -179,6 +174,21 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+737
+61
+909
+94
+number-of-tables
+number-of-tables
+0
+36
+36.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
