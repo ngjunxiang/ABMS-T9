@@ -45,7 +45,7 @@ to setup-wall
   ask patches with [pxcor = 2 or pxcor = 59 and pycor > 2 and pycor < 60] [
     set pcolor blue
   ]
-  ask patches with [pycor = 2 or pycor = 59 and pxcor > 2 and pxcor < 60] [
+  ask patches with [pycor = 2 or pycor = 59 and pxcor >= 2 and pxcor < 60] [
     set pcolor blue
   ]
 
@@ -141,8 +141,8 @@ to setup-agents
 end
 
 to go
-  let rand random-float 1
-
+  let rand random-exponential customers-incoming-rate
+  print rand
   if (rand < customers-incoming-rate) [
     create-customers 1 [
       setxy 1 31
