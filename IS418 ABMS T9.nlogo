@@ -1,13 +1,14 @@
 globals [
   seats
+  customers-incoming-rate
 ]
 
 breed [ customers customer ]
-breed [ stalls stall ]
+breed [ cleaners cleaner ]
 
 customers-own [ target ]
+cleaners-own [ ]
 patches-own [ definition ]
-stalls-own [ stall-id ]
 
 to setup
   clear-all
@@ -17,12 +18,19 @@ to setup
   setup-wall
   setup-tables
   setup-stalls
+  setup-agents
 
   reset-ticks
 end
 
 to setup-globals
   set seats []
+
+  ifelse (peak-hour) [
+    set customers-incoming-rate 0.186076
+  ] [
+    set customers-incoming-rate 0.155347
+  ]
 end
 
 to setup-world-size
@@ -34,7 +42,7 @@ to setup-wall
   ask patches with [pxcor > 2 and pxcor < 59 and pycor > 2 and pycor < 59] [
     set pcolor 8
   ]
-  ask patches with [pxcor = 2 or pxcor = 59 and pycor > 2 and pycor < 60] [ ; breakage of walls to serve as an entrance/exit (y-coords)
+  ask patches with [pxcor = 2 or pxcor = 59 and pycor > 2 and pycor < 60] [
     set pcolor blue
   ]
   ask patches with [pycor = 2 or pycor = 59 and pxcor > 2 and pxcor < 60] [
@@ -66,6 +74,7 @@ to create-stall[input-xcor input-ycor]
   ask patches [
     if (pxcor >= input-xcor and pxcor <= input-xcor + 13 and pycor <= input-ycor and pycor >= input-ycor - 4) [
       set-stall-color
+      set definition "stall"
     ]
 
     if ((pxcor = input-xcor or pxcor = input-xcor + 13) and pycor <= input-ycor and pycor >= input-ycor - 4) [
@@ -127,8 +136,23 @@ to set-stall-color
   set pcolor pink + 2
 end
 
+to setup-agents
+  set-default-shape customers "person"
+end
+
 to go
-  print seats
+  let rand random-float 1
+
+  if (rand < customers-incoming-rate) [
+    create-customers 1 [
+      setxy 1 31
+      set size 3
+    ]
+  ]
+
+  ask customers [
+
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -176,10 +200,10 @@ NIL
 1
 
 SLIDER
-737
-61
-909
-94
+664
+11
+857
+44
 number-of-tables
 number-of-tables
 0
@@ -189,6 +213,66 @@ number-of-tables
 1
 NIL
 HORIZONTAL
+
+SLIDER
+664
+55
+857
+88
+customers-walking-speed
+customers-walking-speed
+0.1
+2
+1.0
+0.1
+1
+NIL
+HORIZONTAL
+
+SWITCH
+872
+11
+995
+44
+peak-hour
+peak-hour
+1
+1
+-1000
+
+BUTTON
+8
+58
+93
+91
+Go Once
+go
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+104
+59
+204
+92
+Go Forever
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
