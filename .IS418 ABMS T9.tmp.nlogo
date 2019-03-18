@@ -211,7 +211,7 @@ to randomize-leftovers
   ; when done eating
     if random-float 1 < probability-of-leaving-leftover [
     ; set that plot to be blue
-    ;set-leftovers for this specific patch
+      aset-leftovers
     ]
 
 end
