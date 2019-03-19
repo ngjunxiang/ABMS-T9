@@ -5,14 +5,20 @@ globals [
 
 breed [ customers customer ]
 breed [ cleaners cleaner ]
+breed [ foods food ]
 
 customers-own [ target to-chope? seat-choped ]
 cleaners-own [ cleaning-duration ]
+foods-own [ customer-id ]
 patches-own [ definition ]
 
 to setup
   clear-all
-  import-drawing "background_stalls.png"
+  create-customers 1 [
+      setxy 1 31
+      set size 3
+        set to-chope? true
+    ]
   setup-globals
   setup-world-size
   setup-wall
@@ -54,9 +60,11 @@ to setup-wall
   ; setup entrance and exit
   ask patches with [pxcor = 2 and pycor >= 30 and pycor <= 33] [
     set pcolor green
+    set definition "entrance"
   ]
   ask patches with [pxcor = 59 and pycor >= 30 and pycor <= 33] [
     set pcolor red
+    set definition "exit"
   ]
 end
 
@@ -158,11 +166,29 @@ end
 
 to move-customers
   ask customers [
-    ifelse (to-chope?) [
-      ; go and find a seat to chope
-    ] [
-      ; find a stall to buy food from
+    if ([definition] of patch-here = 0 and target = 0) [
+      ; move to entrance
+      set target patch 4 29
+      face target
     ]
+
+    if ([definition] of patch-here = "entrance" and target = patch 4 29) [
+      ifelse (to-chope?) [
+        ; go and find a seat to chope
+        set target one-of patches with [definition = "seat" and pcolor != "tissue"]
+        face target
+      ] [
+        ; find a stall to buy food from
+      ]
+    ]
+
+    if ([pcolor] of patch-ahead 1 = 105 or [pcolor] of patch-ahead 1 = 0) [
+      print "A"
+      rt 180
+    ]
+
+    if patch-here = target [print "YESSSS"]
+    fd customers-walking-speed
   ]
 end
 
@@ -177,7 +203,6 @@ to move-cleaner
 end
 
 to detect-leftovers
-
 
 end
 
@@ -197,7 +222,7 @@ end
 
 
 to go
-  spawn-customers
+  ;spawn-customers
 
   move-customers
   move-cleaner
