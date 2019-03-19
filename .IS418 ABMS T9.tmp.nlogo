@@ -1,27 +1,25 @@
 globals [
   seats
   customers-incoming-rate
-  random-leftover-rate
-  walking-path ; the walkable paths in the hawker centre
 ]
 
 breed [ customers customer ]
 breed [ cleaners cleaner ]
 
-customers-own [ target ]
-cleaners-own [ cleaning-duration]
+customers-own [ target to-chope? seat-choped ]
+cleaners-own [ cleaning-duration ]
 patches-own [ definition ]
 
 to setup
   clear-all
-  import-drawing "drawing.jpg"
+
   setup-globals
   setup-world-size
   setup-wall
   setup-tables
   setup-stalls
   setup-agents
-  spawn-cleaners
+  randomize-leftovers ; to be removed
 
   reset-ticks
 end
@@ -31,31 +29,14 @@ to setup-globals
 
   ifelse (peak-hour) [
     set customers-incoming-rate 0.186076
-    set random-leftover-rate 0.150343
   ] [
     set customers-incoming-rate 0.155347
-    set random-leftover-rate 0.119583
   ]
 end
 
 to setup-world-size
   set-patch-size 7
   resize-world 0 61 0 61
-end
-
-to spawn-cleaners
-  create-cleaners number-of-cleaners [
-    if any? walking-path with [definition = "walking-path"]
-    [ask one-of walking-path with [definition = "walking-path"] ; only creates a cleaner on the grey patches
-      [sprout 1 [setup-cleaners]] ; sprout creates an agent on that particular patch
-    ]
-  ]
-end
-
-to setup-cleaners
-  set shape "person"
-  set color red
-  set size 3
 end
 
 to setup-wall
@@ -77,8 +58,6 @@ to setup-wall
   ask patches with [pxcor = 59 and pycor >= 30 and pycor <= 33] [
     set pcolor red
   ]
-
-  set walking-path (patches with [pcolor = 8])
 end
 
 to setup-stalls
@@ -93,7 +72,7 @@ to setup-stalls
   ]
 end
 
-to create-stall[input-xcor input-ycor]
+to create-stall [input-xcor input-ycor]
   ask patches [
     if (pxcor >= input-xcor and pxcor <= input-xcor + 13 and pycor <= input-ycor and pycor >= input-ycor - 4) [
       set-stall-color
@@ -108,7 +87,6 @@ to create-stall[input-xcor input-ycor]
     ]
   ]
 end
-
 
 to setup-tables
   let counter 0
@@ -129,7 +107,7 @@ to setup-tables
   ]
 end
 
-to create-table[input-xcor input-ycor]
+to create-table [input-xcor input-ycor]
   let rand random-exponential customers-incoming-rate
   ask patches [
     if ((pxcor = input-xcor + 1 or pxcor = input-xcor + 5) and (pycor = input-ycor + 1 or pycor = input-ycor + 3)) [
@@ -142,20 +120,96 @@ to create-table[input-xcor input-ycor]
       set-table-color
       set definition "table"
     ]
+  ]
+end
 
-    ; leftover color change not showing
-    ; distribution is not even yet
-    if ((pxcor = input-xcor + 2 or pxcor = input-xcor + 4) and (pycor = input-ycor + 1 or pycor = input-ycor + 3)) [
-      if rand < random-leftover-rate [
-        set-leftover-color
-        set definition "leftover"
+to setup-agents
+  set-default-shape customers "person"
+  set-default-shape cleaners "person service"
+
+  spawn-cleaners
+end
+
+to spawn-customers
+  let rand random-exponential customers-incoming-rate
+  if (rand < customers-incoming-rate) [
+    create-customers 1 [
+      setxy 1 31
+      set size 3
+
+      ifelse (random-float 1 < seat-hogging-probability) [
+        set to-chope? true
+      ] [
+        set to-chope? false
       ]
     ]
   ]
 end
 
-to set-leftover-color
+to spawn-cleaners
+  ask n-of number-of-cleaners patches with [definition = "walking-path"] [; only creates a cleaner on the grey patches
+    sprout-cleaners 1 [ ; sprout a cleaner on
+      set color red
+      set size 3
+      set cleaning-duration 5
+    ]
+  ]
+end
+
+to move-customers
+  ask customers [
+    ifelse (to-chope?) [
+      ; go and find a seat to chope
+    ] [
+      ; find a stall to buy food from
+    ]
+  ]
+end
+
+to move-cleaner
+  ask cleaners [ ; they can only move within the hawker's confinement
+    let next-patch one-of neighbors
+    ifelse (([pcolor] of next-patch = 8) or ([pcolor] of next-patch = green) or ([pcolor] of next-patch = brown))[
+      move-to next-patch
+    ][
+      s
+    ]
+  ]
+  ;detect-leftovers
+end
+
+to detect-leftovers
+
+end
+
+to randomize-leftovers
+  ; simulate leftovers TO BE REMOVED
+  ask n-of 10 patches with [definition = "table"] [
+    set-leftovers
+  ]
+  ; when customer leaves, he/she will have a chance of leaving leftovers
+  ; when done eating
+  if random-float 1 < probability-of-leaving-leftover [
+    ; set that plot to be blue
+    ;set-leftovers for this specific patch
+  ]
+
+end
+
+
+to go
+  spawn-customers
+
+  move-customers
+  move-cleaner
+
+  tick
+end
+
+
+to set-leftovers
   set pcolor yellow
+  set definition "leftovers"
 end
 
 to set-table-color ; change the color of the table
@@ -172,68 +226,6 @@ end
 
 to set-stall-color
   set pcolor pink + 2
-end
-
-to set-leftovers
-  set pcolor blue
-  set definition "leftovers"
-end
-
-to setup-agents
-  set-default-shape customers "person"
-  set-default-shape cleaners "person"
-end
-
-
-to move-cleaner
-  ask cleaners [
-    rt random-float rate-of-random-turn
-    lt (rate-of-random-turn / 2)
-    fd 1 ; move 1 step
-
-  ]
-  ;detect-leftovers
-end
-
-to detect-leftovers
-
-
-end
-
-to randomize-leftovers
-  create-cleaners number-of-cleaners [
-    if any? walking-path with [definition = "walking-path"]
-    [ask one-of walking-path with [definition = "walking-path"] ; only creates a cleaner on the grey patches
-      [sprout 1 [setup-cleaners]] ; sprout creates an agent on that particular patch
-    ]
-  ]
-  ; when customer leaves, he/she will have a chance of leaving leftovers
-  ; when done eating
-    if random-float 1 < probability-of-leaving-leftover [
-    ; set that plot to be blue
-      aset-leftovers
-    ]
-
-end
-
-
-to go
-  let rand random-exponential customers-incoming-rate
-  print rand
-  if (rand < customers-incoming-rate) [
-    create-customers 1 [
-      setxy 1 31
-      set size 3
-    ]
-  ]
-
-  ask customers [
-
-  ]
-
-  move-cleaner
-
-  tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -283,7 +275,7 @@ NIL
 SLIDER
 664
 11
-857
+883
 44
 number-of-tables
 number-of-tables
@@ -298,7 +290,7 @@ HORIZONTAL
 SLIDER
 664
 55
-857
+883
 88
 customers-walking-speed
 customers-walking-speed
@@ -311,10 +303,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-872
-11
-995
-44
+43
+109
+166
+142
 peak-hour
 peak-hour
 1
@@ -356,10 +348,10 @@ NIL
 1
 
 SLIDER
-664
-96
-858
-129
+916
+10
+1110
+43
 number-of-cleaners
 number-of-cleaners
 1
@@ -371,31 +363,31 @@ NIL
 HORIZONTAL
 
 SLIDER
-665
-135
-855
-169
-rate-of-random-turn
-rate-of-random-turn
-1
-100
-52.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-665
+664
+141
+884
 174
-885
-207
 probability-of-leaving-leftover
 probability-of-leaving-leftover
 0.01
 1
 0.54
 0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+664
+98
+884
+131
+seat-hogging-probability
+seat-hogging-probability
+0
+1
+0.5
+0.1
 1
 NIL
 HORIZONTAL
@@ -609,6 +601,26 @@ Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300
 Rectangle -7500403 true true 127 79 172 94
 Polygon -7500403 true true 195 90 240 150 225 180 165 105
 Polygon -7500403 true true 105 90 60 150 75 180 135 105
+
+person service
+false
+0
+Polygon -7500403 true true 180 195 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285
+Polygon -1 true false 120 90 105 90 60 195 90 210 120 150 120 195 180 195 180 150 210 210 240 195 195 90 180 90 165 105 150 165 135 105 120 90
+Polygon -1 true false 123 90 149 141 177 90
+Rectangle -7500403 true true 123 76 176 92
+Circle -7500403 true true 110 5 80
+Line -13345367 false 121 90 194 90
+Line -16777216 false 148 143 150 196
+Rectangle -16777216 true false 116 186 182 198
+Circle -1 true false 152 143 9
+Circle -1 true false 152 166 9
+Rectangle -16777216 true false 179 164 183 186
+Polygon -2674135 true false 180 90 195 90 183 160 180 195 150 195 150 135 180 90
+Polygon -2674135 true false 120 90 105 90 114 161 120 195 150 195 150 135 120 90
+Polygon -2674135 true false 155 91 128 77 128 101
+Rectangle -16777216 true false 118 129 141 140
+Polygon -2674135 true false 145 91 172 77 172 101
 
 plant
 false
