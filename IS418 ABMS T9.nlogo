@@ -167,15 +167,17 @@ to move-customers
 end
 
 to move-cleaner
-  ask cleaners [
-
-    fd 1 ; move 1 step
-
+  ask cleaners [ ; they can only move within the hawker's confinement
+    let next-patch one-of neighbors
+    if (([pcolor] of next-patch = 8) or ([pcolor] of next-patch = green) or ([pcolor] of next-patch = brown))[
+      move-to next-patch
+    ]
   ]
   ;detect-leftovers
 end
 
 to detect-leftovers
+
 
 end
 
