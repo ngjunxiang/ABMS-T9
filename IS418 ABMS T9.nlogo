@@ -1,5 +1,6 @@
 globals [
   seats
+  stalls
   customers-incoming-rate
 ]
 
@@ -28,6 +29,7 @@ end
 
 to setup-globals
   set seats []
+  set stalls []
 
   ifelse (peak-hour) [
     set customers-incoming-rate 0.186076
@@ -90,6 +92,18 @@ to create-stall [input-xcor input-ycor]
     if ((pycor = input-ycor or pycor = input-ycor - 4) and pxcor >= input-xcor and pxcor <= input-xcor + 13) [
       set pcolor white
     ]
+
+    ifelse (pycor < 31) [
+      if (pycor = input-ycor + 1 and pxcor = input-xcor + 7) [
+        set definition (word "stall" pxcor pycor)
+        set stalls lput (word "stall" pxcor pycor) stalls
+      ]
+    ] [
+      if (pycor = input-ycor - 3 and pxcor = input-xcor + 7) [
+        set definition (word "stall" pxcor pycor)
+        set stalls lput (word "stall" pxcor pycor) stalls
+      ]
+    ]
   ]
 end
 
@@ -133,12 +147,6 @@ to setup-agents
   set-default-shape cleaners "person service"
 
   spawn-cleaners
-
-  create-customers 1 [
-    setxy 1 31
-    set size 3
-    set to-chope? true
-  ]
 end
 
 to spawn-customers
@@ -172,23 +180,65 @@ to move-customers
     if ([definition] of patch-here = 0 and target = 0) [
       ; move to entrance
       set target patch 4 29
-      face target
     ]
 
     if ([definition] of patch-here = "entrance" and target = patch 4 29) [
       ifelse (to-chope?) [
         ; go and find a seat to chope
-        set target one-of patches with [definition = "seat" and pcolor != "tissue"]
-        face target
+        set target one-of patches with [definition = "seat" and pcolor != "tissue" and not any? customers-here]
+
+        if (target = nobody) [ ; no seats
+
+        ]
+
+        move-towards target
       ] [
+        set target one-of stalls
         ; find a stall to buy food from
       ]
+    ]
+
+    if (to-chope? and seat-choped = 0) [
+      ask patch-here [
+        ; place tissue packet
+      ]
+
+      set seat-choped patch-here
     ]
 
     if ([pcolor] of patch-ahead 1 = 105 or [pcolor] of patch-ahead 1 = 0) [
       rt 180
     ]
 
+    move-towards target
+  ]
+end
+
+to move-towards [destination]
+  let my-x xcor
+  let my-y ycor
+  let t-x [pxcor] of destination
+  let t-y [pycor] of destination
+
+  if (my-x < t-x) [
+    set heading 90
+  ]
+
+  if (my-x > t-x) [
+    set heading 270
+  ]
+
+  if (my-x = t-x) [
+    ifelse (my-y > t-y) [
+      set heading 180
+    ] [
+      set heading 0
+    ]
+  ]
+
+  ifelse distance target < customers-walking-speed [
+    move-to target
+  ] [
     fd customers-walking-speed
   ]
 end
@@ -228,7 +278,7 @@ end
 
 
 to go
-  ;spawn-customers
+  spawn-customers
 
   move-customers
   move-cleaner
