@@ -12,7 +12,7 @@ patches-own [ definition ]
 
 to setup
   clear-all
-
+  import-drawing "background_stalls.png"
   setup-globals
   setup-world-size
   setup-wall
