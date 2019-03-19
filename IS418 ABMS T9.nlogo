@@ -20,7 +20,7 @@ to setup
   setup-wall
   setup-tables
   setup-stalls
-  ;setup-agents
+  setup-agents
   randomize-leftovers ; to be removed
 
   reset-ticks
@@ -39,7 +39,7 @@ end
 to setup-world
   set-patch-size 7
   resize-world 0 61 0 61
-  ;import-drawing "background_stalls.png"
+  import-drawing "background_stalls.png"
 end
 
 to setup-wall
