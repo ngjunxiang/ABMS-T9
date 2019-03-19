@@ -14,17 +14,13 @@ patches-own [ definition ]
 
 to setup
   clear-all
-  create-customers 1 [
-      setxy 1 31
-      set size 3
-        set to-chope? true
-    ]
+
   setup-globals
-  setup-world-size
+  setup-world
   setup-wall
   setup-tables
   setup-stalls
-  setup-agents
+  ;setup-agents
   randomize-leftovers ; to be removed
 
   reset-ticks
@@ -40,9 +36,10 @@ to setup-globals
   ]
 end
 
-to setup-world-size
+to setup-world
   set-patch-size 7
   resize-world 0 61 0 61
+  ;import-drawing "background_stalls.png"
 end
 
 to setup-wall
@@ -136,6 +133,12 @@ to setup-agents
   set-default-shape cleaners "person service"
 
   spawn-cleaners
+
+  create-customers 1 [
+    setxy 1 31
+    set size 3
+    set to-chope? true
+  ]
 end
 
 to spawn-customers
@@ -183,11 +186,9 @@ to move-customers
     ]
 
     if ([pcolor] of patch-ahead 1 = 105 or [pcolor] of patch-ahead 1 = 0) [
-      print "A"
       rt 180
     ]
 
-    if patch-here = target [print "YESSSS"]
     fd customers-walking-speed
   ]
 end
