@@ -199,13 +199,12 @@ to move-cleaner
     if (([pcolor] of next-patch = 8) or ([pcolor] of next-patch = green) or ([pcolor] of next-patch = brown))[
       move-to next-patch
     ]
-    detect-leftovers
   ]
-
+  ;detect-leftovers
 end
 
 to detect-leftovers
-  ask-concurrent patches in-cone 3 360 [ ;5 is the length of the cone, 50 is the angle it sees/covers
+ask-concurrent patches in-cone 3 360 [ ;5 is the length of the cone, 50 is the angle it sees/covers
     if pcolor = yellow [
       set pcolor 56
     ]
