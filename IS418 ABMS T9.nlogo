@@ -7,6 +7,7 @@ globals [
 breed [ customers customer ]
 breed [ cleaners cleaner ]
 breed [ foods food ]
+breed [ tissues tissue ]
 
 customers-own [ target to-chope? seat-choped ]
 cleaners-own [ cleaning-duration ]
@@ -15,7 +16,7 @@ patches-own [ definition ]
 
 to setup
   clear-all
-
+  ;create-single-customer
   setup-globals
   setup-world
   setup-wall
@@ -25,6 +26,15 @@ to setup
   randomize-leftovers ; to be removed
 
   reset-ticks
+end
+
+to create-single-customer
+  create-customers 1 [
+    setxy 1 31
+    set size 3
+
+    set to-chope? true
+  ]
 end
 
 to setup-globals
@@ -95,13 +105,13 @@ to create-stall [input-xcor input-ycor]
 
     ifelse (pycor < 31) [
       if (pycor = input-ycor + 1 and pxcor = input-xcor + 7) [
-        set definition (word "stall" pxcor pycor)
-        set stalls lput (word "stall" pxcor pycor) stalls
+        set definition (word "stall " pxcor " " pycor)
+        set stalls lput (self) stalls
       ]
     ] [
       if (pycor = input-ycor - 3 and pxcor = input-xcor + 7) [
-        set definition (word "stall" pxcor pycor)
-        set stalls lput (word "stall" pxcor pycor) stalls
+        set definition (word "stall " pxcor " " pycor)
+        set stalls lput (self) stalls
       ]
     ]
   ]
@@ -145,12 +155,13 @@ end
 to setup-agents
   set-default-shape customers "person"
   set-default-shape cleaners "person service"
+  set-default-shape tissues "tissue"
 
   spawn-cleaners
 end
 
 to spawn-customers
-  let rand random-exponential customers-incoming-rate
+  let rand random-float 1
   if (rand < customers-incoming-rate) [
     create-customers 1 [
       setxy 1 31
@@ -177,37 +188,34 @@ end
 
 to move-customers
   ask customers [
-    if ([definition] of patch-here = 0 and target = 0) [
-      ; move to entrance
-      set target patch 4 29
-    ]
-
-    if ([definition] of patch-here = "entrance" and target = patch 4 29) [
+    if (target = 0 or target = nobody) [
       ifelse (to-chope?) [
         ; go and find a seat to chope
-        set target one-of patches with [definition = "seat" and pcolor != "tissue" and not any? customers-here]
+        set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
 
-        if (target = nobody) [ ; no seats
-
+        if (target = 0 or target = nobody) [ ; no seats
+          set target patch 61 31
         ]
-
-        move-towards target
       ] [
         set target one-of stalls
         ; find a stall to buy food from
       ]
     ]
 
-    if (to-chope? and seat-choped = 0) [
+    if (to-chope? and seat-choped = 0 and patch-here = target) [
       ask patch-here [
         ; place tissue packet
+        sprout-tissues 1 [
+          set size 2
+        ]
       ]
 
+      set target one-of stalls
       set seat-choped patch-here
     ]
 
-    if ([pcolor] of patch-ahead 1 = 105 or [pcolor] of patch-ahead 1 = 0) [
-      rt 180
+    if (target = patch 61 31 and [pcolor] of patch-here = 0 and xcor > 4) [
+      die
     ]
 
     move-towards target
@@ -754,6 +762,12 @@ Circle -16777216 true false 30 30 240
 Circle -7500403 true true 60 60 180
 Circle -16777216 true false 90 90 120
 Circle -7500403 true true 120 120 60
+
+tissue
+true
+0
+Rectangle -13791810 true false 75 105 225 195
+Rectangle -1 true false 105 135 195 165
 
 tree
 false
