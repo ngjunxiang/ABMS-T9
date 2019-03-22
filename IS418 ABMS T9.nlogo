@@ -10,9 +10,9 @@ breed [ foods food ]
 breed [ tissues tissue ]
 
 customers-own [ target to-chope? seat-choped ]
-cleaners-own [ cleaning-duration ]
+cleaners-own [ cleaning-duration cleaner-area-radius origin]
 foods-own [ customer-id ]
-patches-own [ definition ]
+patches-own [ definition occupied?]
 
 to setup
   clear-all
@@ -32,7 +32,7 @@ to create-single-customer
   create-customers 1 [
     setxy 1 31
     set size 3
-
+    occupy
     set to-chope? true
   ]
 end
@@ -156,7 +156,6 @@ to setup-agents
   set-default-shape customers "person"
   set-default-shape cleaners "person service"
   set-default-shape tissues "tissue"
-
   spawn-cleaners
 end
 
@@ -166,7 +165,7 @@ to spawn-customers
     create-customers 1 [
       setxy 1 31
       set size 3
-
+      occupy
       ifelse (random-float 1 < seat-hogging-probability) [
         set to-chope? true
       ] [
@@ -182,9 +181,32 @@ to spawn-cleaners
       set color red
       set size 3
       set cleaning-duration 5
+      occupy
     ]
   ]
 end
+
+
+to spawn-cleaner-within-area
+  if mouse-down? [
+    if [occupied?] of patch round mouse-xcor round mouse-ycor = 0 and [definition] of patch round mouse-xcor round mouse-ycor = "walking-path" [
+      create-cleaners 1 [
+        ;set cleaner-area-radius area-radius
+        setxy round mouse-xcor round mouse-ycor
+        set origin patch round mouse-xcor round mouse-ycor
+        set shape "person service"
+        set color red
+        set size 3
+        ;set assignedarea patches in-radius c-area-radius
+        occupy
+        set number-of-cleaners (number-of-cleaners + 1)
+      ]
+      stop
+    ]
+  ]
+end
+
+
 
 to move-customers
   ask customers [
@@ -217,8 +239,9 @@ to move-customers
     if (target = patch 61 31 and [pcolor] of patch-here = 0 and xcor > 4) [
       die
     ]
-
+    unoccupy
     move-towards target
+    occupy
   ]
 end
 
@@ -255,7 +278,9 @@ to move-cleaner
   ask cleaners [ ; they can only move within the hawker's confinement
     let next-patch one-of neighbors
     if (([pcolor] of next-patch = 8) or ([pcolor] of next-patch = green) or ([pcolor] of next-patch = brown))[
+      unoccupy
       move-to next-patch
+      occupy
     ]
     detect-leftovers
   ]
@@ -264,11 +289,12 @@ end
 
 to detect-leftovers
   ask-concurrent patches in-cone 3 360 [ ;5 is the length of the cone, 50 is the angle it sees/covers
-    if pcolor = yellow [
+    if definition = "leftovers" [
       set pcolor 56
     ]
   ]
 end
+
 
 to randomize-leftovers
   ; simulate leftovers TO BE REMOVED
@@ -287,13 +313,19 @@ end
 
 to go
   spawn-customers
-
   move-customers
   move-cleaner
 
   tick
 end
 
+to occupy
+  ask patch-here [set occupied? "Yes"]
+end
+
+to unoccupy
+  ask patch-here [set occupied? "0"]
+end
 
 to set-leftovers
   set pcolor yellow
@@ -443,8 +475,8 @@ SLIDER
 number-of-cleaners
 number-of-cleaners
 1
-10
-5.0
+100
+11.0
 1
 1
 NIL
@@ -479,6 +511,23 @@ seat-hogging-probability
 1
 NIL
 HORIZONTAL
+
+BUTTON
+665
+183
+844
+216
+spawn-cleaner-within-area
+spawn-cleaner-within-area
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
