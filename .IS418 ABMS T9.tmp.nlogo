@@ -295,7 +295,7 @@ to detect-leftovers
   ask cleaners [
   ask-concurrent patches in-cone 3 360 [ ;5 is the length of the cone, 50 is the angle it sees/covers
     if (definition = "table" or definition = "seat" or definition = "walking-path" or definition = "leftovers")[
-      if show-cleaner-vision? [
+      if show-cleaner-vision [
           set pcolor cyan + 4
       ]
     if definition = "leftovers" [
@@ -545,11 +545,11 @@ NIL
 SWITCH
 20
 154
-191
+185
 187
-show-cleaner-vision?
-show-cleaner-vision?
-1
+show-cleaner-vision
+show-cleaner-vision
+0
 1
 -1000
 
