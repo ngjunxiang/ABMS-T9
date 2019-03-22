@@ -9,10 +9,10 @@ breed [ cleaners cleaner ]
 breed [ foods food ]
 breed [ tissues tissue ]
 
-customers-own [ target to-chope? seat-choped ]
+customers-own [ target to-chope? seat-choped xCor yCor id]
 cleaners-own [ cleaning-duration cleaner-area-radius origin current-tick]
 foods-own [ customer-id ]
-patches-own [ definition occupied?]
+patches-own [ definition occupied? queue queueCount]
 
 to setup
   clear-all
@@ -221,6 +221,11 @@ to move-customers
       ] [
         set target one-of stalls
         ; find a stall to buy food from
+        set xCor [pxcor] of patch-here
+        set yCor [pycor] of patch-here
+        set id who
+        customer-queue id xCor yCor
+
       ]
     ]
 
@@ -320,6 +325,27 @@ to randomize-leftovers
     ; set that plot to be blue
     ;set-leftovers for this specific patch
   ]
+
+end
+
+to customer-queue[customer_id patch_x patch_y]
+
+  ask patch patch_x patch_y [
+    set queue []
+    set queue lput  customer_id  queue
+    set queueCount queueCount + 1
+
+  ]
+
+end
+
+
+to customer-dequeue [patch_x patch_y]
+
+  ask patch patch_x patch_y [
+   set queue remove-item 0 queue
+  ]
+
 
 end
 
@@ -442,7 +468,7 @@ SWITCH
 142
 peak-hour
 peak-hour
-1
+0
 1
 -1000
 
