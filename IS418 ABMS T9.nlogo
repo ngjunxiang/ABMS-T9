@@ -2,7 +2,9 @@ globals [
   seats
   stalls
   stalls-queue
+  customers-to-get-food
   customers-incoming-rate
+  total-number-of-customers
 ]
 
 breed [ customers customer ]
@@ -10,33 +12,42 @@ breed [ cleaners cleaner ]
 breed [ foods food ]
 breed [ tissues tissue ]
 
-customers-own [ target to-chope? seat-choped patience-level satisfaction-level ticks-counter ]
+customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter ]
 cleaners-own [ target cleaning-duration ticks-counter ]
 foods-own [ customer-id ]
 patches-own [ definition description occupied? ]
 
 to setup
   clear-all
-  ;create-single-customer ; for testing purposes
+
   setup-globals
   setup-world
   setup-wall
   setup-tables
   setup-stalls
   setup-agents
-  randomize-leftovers ; to be removed
+
+  spawn-cleaners
 
   reset-ticks
 end
 
-to create-single-customer
+to test-single-customer
   create-customers 1 [
     setxy 1 31
     set size 3
-    occupy
-    set to-chope? true
+    set target nobody
+    set status "spawned"
     set satisfaction-level customers-satisfaction-level
     set patience-level customers-patience-level
+    occupy
+    ifelse (random-float 1 < seat-hogging-probability) [
+      set to-chope? true
+      set seat-choped nobody
+    ] [
+      set to-chope? false
+      set seat-choped nobody
+    ]
   ]
 end
 
@@ -44,6 +55,8 @@ to setup-globals
   set seats []
   set stalls []
   set stalls-queue []
+  set customers-to-get-food []
+  set total-number-of-customers 0
 
   ifelse (peak-hour) [
     set customers-incoming-rate 0.186076
@@ -56,6 +69,8 @@ to setup-world
   set-patch-size 7
   resize-world 0 61 0 61
   import-drawing "background_stalls.png"
+
+  ask patches [ set occupied? false ]
 end
 
 to setup-wall
@@ -65,9 +80,11 @@ to setup-wall
   ]
   ask patches with [pxcor = 2 or pxcor = 59 and pycor > 2 and pycor < 60] [
     set pcolor blue
+    set definition "wall"
   ]
   ask patches with [pycor = 2 or pycor = 59 and pxcor >= 2 and pxcor < 60] [
     set pcolor blue
+    set definition "wall"
   ]
 
   ; setup entrance and exit
@@ -115,7 +132,7 @@ to create-stall [input-xcor input-ycor]
         set stalls-queue lput ([]) stalls-queue
       ]
     ] [
-      if (pycor = input-ycor - 3 and pxcor = input-xcor + 10) [
+      if (pycor = input-ycor - 4 and pxcor = input-xcor + 10) [
         set definition (word "stall " pxcor " " pycor)
         set stalls lput (self) stalls
         set stalls-queue lput ([]) stalls-queue
@@ -144,7 +161,6 @@ to setup-tables
 end
 
 to create-table [input-xcor input-ycor]
-  let rand random-exponential customers-incoming-rate
   ask patches [
     if ((pxcor = input-xcor + 1 or pxcor = input-xcor + 5) and (pycor = input-ycor + 1 or pycor = input-ycor + 3)) [
       set-seat-color
@@ -167,7 +183,7 @@ to setup-agents
   set-default-shape customers "person"
   set-default-shape cleaners "person service"
   set-default-shape tissues "tissue"
-  spawn-cleaners
+  set-default-shape foods "food"
 end
 
 to spawn-customers
@@ -175,14 +191,19 @@ to spawn-customers
     create-customers 1 [
       setxy 1 31
       set size 3
+      set color 115
       set target nobody
+      set status "spawned"
       set satisfaction-level customers-satisfaction-level
       set patience-level customers-patience-level
+      set total-number-of-customers (total-number-of-customers + 1)
       occupy
       ifelse (random-float 1 < seat-hogging-probability) [
         set to-chope? true
+        set seat-choped nobody
       ] [
         set to-chope? false
+        set seat-choped nobody
       ]
     ]
   ]
@@ -203,12 +224,14 @@ end
 
 to spawn-cleaner-within-area
   if mouse-down? [
-    if ([occupied?] of patch round mouse-xcor round mouse-ycor = 0 and [definition] of patch round mouse-xcor round mouse-ycor = "walking-path") [
+    if ([occupied?] of patch round mouse-xcor round mouse-ycor = false and [definition] of patch round mouse-xcor round mouse-ycor = "walking-path") [
       create-cleaners 1 [
         setxy round mouse-xcor round mouse-ycor
-        set shape "person service"
         set color red
         set size 3
+        set cleaning-duration 5
+        set ticks-counter 0
+        set target nobody
         set number-of-cleaners (number-of-cleaners + 1)
         occupy
       ]
@@ -223,19 +246,31 @@ to move-customers
     if (target = nobody) [
       ifelse (to-chope?) [
         ; go and find a seat to chope
+        set status "choping"
         set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
 
         if (target = nobody) [ ; no seats
-          set target patch 61 31 ; leave
+          set target patch 61 31 ; leave ; to change
+          set status "leaving"
         ]
       ] [
         ; find a stall to buy food from
         set target one-of stalls
+        set status "heading to stall"
+      ]
+    ]
+
+    ; seat taken before customer reaches
+    if ([definition] of target = "seat" and (any? customers-on target or any? tissues-on target) and patch-here != target and seat-choped = nobody) [
+      set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
+
+      if (target = nobody) [
+        set target patch 61 31 ; leave ; to change
       ]
     ]
 
     ; when customer is at his target seat
-    if (to-chope? and seat-choped = 0 and patch-here = target) [
+    if (to-chope? and seat-choped = nobody and patch-here = target) [
       ask patch-here [
         ; place tissue packet
         sprout-tissues 1 [ ; chope using tissue
@@ -243,16 +278,89 @@ to move-customers
         ]
       ]
 
-      set target one-of stalls
+      let table-patch nobody
+      if ([description] of patch-here = "left-seat") [
+        set table-patch patch-at 1 0
+      ]
+      if ([description] of patch-here = "right-seat") [
+        set table-patch patch-at -1 0
+      ]
+
+      ifelse ([definition] of table-patch = "table") [
+        set target one-of stalls
+        set status "heading to stall"
+      ] [
+        set status "waiting for cleaner"
+        ; return himself?
+      ]
       set seat-choped patch-here
+    ]
+
+    if (status = "waiting for cleaner") [
+      let table-patch nobody
+      if ([description] of patch-here = "left-seat") [
+        set table-patch patch-at 1 0
+      ]
+      if ([description] of patch-here = "right-seat") [
+        set table-patch patch-at -1 0
+      ]
+
+      if ([definition] of table-patch = "table") [
+        set target one-of stalls
+        set status "heading to stall"
+      ]
     ]
 
     if (member? target stalls) [ ; check if customer is headed for a stall
       set target select-queue-patch
     ]
 
-    if (member? target stalls-queue) [ ; check if customer is in queue
+    queue-up-get-food
 
+    if (target != nobody) [
+      if ([definition] of target = "seat" and target = patch-here and count my-links > 0) [
+        let my-food nobody
+        ask my-links [
+          set my-food one-of both-ends with [ member? self foods ]
+          untie
+        ]
+        ask tissues-here [ die ]
+
+        if (my-food != nobody) [
+          ask my-food [
+            if ([description] of patch-here = "left-seat") [
+              move-to patch-at 1 0
+            ]
+            if ([description] of patch-here = "right-seat") [
+              move-to patch-at -1 0
+            ]
+          ]
+          set status "eating"
+        ]
+      ]
+    ]
+
+    if (status = "eating") [
+      ; start eating
+      if (ticks-counter = 0) [
+        set ticks-counter ticks
+      ]
+
+      ; finished eating
+      if (ticks = ticks-counter + customers-eating-time) [
+        ask my-links [
+          ask one-of both-ends with [ member? self foods ] [
+            set color red
+          ]
+          die
+        ]
+
+        set-leftovers
+
+        set ticks-counter 0
+        set target patch 61 31
+        set status "leaving"
+      ]
     ]
 
     ; exit
@@ -262,6 +370,57 @@ to move-customers
 
     move-towards target
   ]
+end
+
+to queue-up-get-food
+  ; move up queue
+  let stall-num 0
+  let queue-num 0
+
+  foreach stalls-queue [ queue ->
+    if (member? target queue and patch-here = target) [
+      set stall-num position queue stalls-queue
+      set queue-num position target queue
+      set status "queuing"
+    ]
+  ]
+
+  if (status = "queuing") [
+    ifelse (queue-num = 0) [
+      if (ticks-counter = 0) [
+        set ticks-counter ticks
+      ]
+
+      if (ticks = ticks-counter + time-to-prepare-food) [
+        set customers-to-get-food lput (self) customers-to-get-food
+        set ticks-counter 0
+
+        ifelse (seat-choped = nobody) [
+          set target clean-empty-seat
+          set status "heading to seat"
+
+          if (target = nobody) [
+            set target patch 61 31 ; to change
+            set status "looking for seat"
+            ; wait until there is a seat
+          ]
+        ] [
+          set target seat-choped
+          set status "heading to seat"
+        ]
+      ]
+    ] [
+      let next-queue-patch item (queue-num - 1) (item stall-num stalls-queue)
+
+      if (not any? customers-on next-queue-patch) [
+        set target next-queue-patch
+      ]
+    ]
+  ]
+end
+
+to-report clean-empty-seat
+  report one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here and [definition] of patch-at 1 0 != "leftovers" and [definition] of patch-at 1 0 != "leftovers"]
 end
 
 to move-towards [destination]
@@ -283,6 +442,15 @@ to move-towards [destination]
     ifelse (my-y > t-y) [
       set heading 180
     ] [
+      set heading 0
+    ]
+  ]
+
+  if ([definition] of patch-ahead 1 = "wall") [
+    if (my-y > t-y) [
+      set heading 180
+    ]
+    if (my-y < t-y) [
       set heading 0
     ]
   ]
@@ -329,7 +497,12 @@ to detect-leftovers
           if (ticks = ticks-counter + cleaning-duration) [ ; check if cleaning is done
             ask leftover [
               set-table-color
+
+              ask foods-here [
+                die
+              ]
             ]
+
             set target nobody
             set ticks-counter 0
           ]
@@ -355,20 +528,6 @@ to show-cleaners-vision
   ]
 end
 
-to randomize-leftovers ; to remove
-  ; simulate leftovers TO BE REMOVED
-  ask n-of 10 patches with [definition = "table"] [
-    set-leftovers
-  ]
-  ; when customer leaves, he/she will have a chance of leaving leftovers
-  ; when done eating
-  if random-float 1 < probability-of-leaving-leftover [
-    ; set that plot to be blue
-    ;set-leftovers for this specific patch
-  ]
-
-end
-
 to-report select-queue-patch
   let result-patch nobody
   let stall-x [pxcor] of target
@@ -378,14 +537,22 @@ to-report select-queue-patch
   ifelse (length stall-queue = 0) [
     set result-patch get-next-vertical-queue-patch stall-x stall-y false
   ] [
+    ; check for empty patches in queue
+    foreach stall-queue [ queue ->
+      if (not any? customers-on queue) [
+        report queue
+      ]
+    ]
+
+    ; else add patch to queue
     let last-queue-patch item (length stall-queue - 1) stall-queue
     let last-queue-patch-x [pxcor] of last-queue-patch
     let last-queue-patch-y [pycor] of last-queue-patch
     let to-reverse false
-    ifelse ((length stall-queue) mod 10 = 0) [
+    ifelse ((length stall-queue) mod 3 = 0) [
       set result-patch get-next-horizontal-queue-patch last-queue-patch-x last-queue-patch-y
     ] [
-      if (floor (length stall-queue / 10) mod 2 = 1) [
+      if (floor (length stall-queue / 3) mod 2 = 1) [
         set to-reverse true
       ]
       set result-patch get-next-vertical-queue-patch last-queue-patch-x last-queue-patch-y to-reverse
@@ -415,10 +582,22 @@ to-report get-next-vertical-queue-patch [stall-x stall-y to-reverse]
   report patch stall-x (stall-y + 1)
 end
 
-to get-food [ x-cor y-cor ]
-  ; sprout food then create link with customer and tie
-  sprout-foods 1 [
+to spawn-food
+  ; spawn food for each customers
+  foreach customers-to-get-food [c ->
+    let x [xcor] of c
+    let y [ycor] of c
+    create-foods 1 [
+      setxy x y
+      set size 2
+      set color 45
+      create-link-with c [ tie ] ; food to follow customer
+    ]
+  ]
+  set customers-to-get-food []
 
+  ask foods [
+    if ([pcolor] of patch-here = 0) [ die ]
   ]
 end
 
@@ -427,21 +606,29 @@ to go
   spawn-customers
   move-customers
   move-cleaner
-
+  spawn-food
   tick
 end
 
 to occupy
-  ask patch-here [set occupied? "Yes"]
+  ask patch-here [set occupied? true]
 end
 
 to unoccupy
-  ask patch-here [set occupied? "0"]
+  ask patch-here [set occupied? false]
 end
 
 to set-leftovers
-  set pcolor yellow
-  set definition "leftovers"
+  if ([description] of patch-here = "left-seat") [
+    ask patch-at 1 0 [
+      set definition "leftovers"
+    ]
+  ]
+  if ([description] of patch-here = "right-seat") [
+    ask patch-at -1 0 [
+      set definition "leftovers"
+    ]
+  ]
 end
 
 to set-table-color ; change the color of the table
@@ -547,7 +734,7 @@ SWITCH
 142
 peak-hour
 peak-hour
-0
+1
 1
 -1000
 
@@ -594,7 +781,7 @@ number-of-cleaners
 number-of-cleaners
 0
 20
-5.0
+8.0
 5
 1
 NIL
@@ -713,6 +900,43 @@ time-to-prepare-food
 1
 120
 30.0
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+667
+347
+862
+392
+Number of customers in premise
+count customers
+17
+1
+11
+
+MONITOR
+667
+291
+861
+336
+Total customers
+total-number-of-customers
+17
+1
+11
+
+SLIDER
+903
+227
+1124
+260
+customers-eating-time
+customers-eating-time
+30
+1200
+600.0
 1
 1
 NIL
@@ -889,6 +1113,16 @@ Circle -7500403 true true 96 51 108
 Circle -16777216 true false 113 68 74
 Polygon -10899396 true false 189 233 219 188 249 173 279 188 234 218
 Polygon -10899396 true false 180 255 150 210 105 210 75 240 135 240
+
+food
+false
+0
+Polygon -7500403 true true 30 105 45 255 105 255 120 105
+Rectangle -7500403 true true 15 90 135 105
+Polygon -7500403 true true 75 90 105 15 120 15 90 90
+Polygon -7500403 true true 135 225 150 240 195 255 225 255 270 240 285 225 150 225
+Polygon -7500403 true true 135 180 150 165 195 150 225 150 270 165 285 180 150 180
+Rectangle -7500403 true true 135 195 285 210
 
 house
 false
