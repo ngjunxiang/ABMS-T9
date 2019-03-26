@@ -987,7 +987,7 @@ number-of-tray-return-points
 number-of-tray-return-points
 0
 20
-3.0
+1.0
 1
 1
 NIL
