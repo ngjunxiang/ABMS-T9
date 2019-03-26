@@ -3,7 +3,7 @@ globals [
   stalls
   stalls-queue
   customers-to-get-food
-  customers-incoming-rate
+  customers-arrival-rate
   total-number-of-customers
 ]
 
@@ -59,9 +59,9 @@ to setup-globals
   set total-number-of-customers 0
 
   ifelse (peak-hour) [
-    set customers-incoming-rate 0.186076
+    set customers-arrival-rate 0.186076
   ] [
-    set customers-incoming-rate 0.155347
+    set customers-arrival-rate 0.155347
   ]
 end
 
@@ -187,7 +187,7 @@ to setup-agents
 end
 
 to spawn-customers
-  if (random-float 1 < customers-incoming-rate) [
+  if (random-float 1 < customers-arrival-rate) [
     create-customers 1 [
       setxy 1 31
       set size 3
@@ -781,7 +781,7 @@ number-of-cleaners
 number-of-cleaners
 0
 20
-8.0
+5.0
 5
 1
 NIL
