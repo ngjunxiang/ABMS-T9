@@ -1,3 +1,5 @@
+extensions[ bitmap ]
+
 globals [
   seats
   stalls
@@ -29,9 +31,8 @@ to setup
   setup-tables
   setup-stalls
   setup-agents
-
+  setup-legend-plot
   spawn-cleaners
-
   reset-ticks
 end
 
@@ -295,7 +296,7 @@ to move-customers
       ask patch-here [
         ; place tissue packet
         sprout-tissues 1 [ ; chope using tissue
-          set size 2
+          set size 5
         ]
       ]
 
@@ -608,7 +609,7 @@ to spawn-food
     let y [ycor] of c
     create-foods 1 [
       setxy x y
-      set size 2
+      set size 5
       set color 45
       create-link-with c [ tie ] ; food to follow customer
     ]
@@ -670,6 +671,35 @@ end
 
 to set-cleaner-vision-color
   set pcolor cyan + 4
+end
+
+to setup-legend-plot
+  ; Choose correct plot
+  set-current-plot "Legend"
+  clear-plot
+
+  ; Define starting y and color
+  let starts [ [ 10 orange ] [ 7 red ] [ 4 blue ] [ 1 yellow ] ]
+
+  ; for each value in starts
+  foreach starts [ start ->
+    ; make a range of values starting at the initial
+    ; y value from 'starts'
+    let s first start
+    let f s - 2.5
+    let ran ( range s f -0.01 )
+    create-temporary-plot-pen "temp"
+    set-plot-pen-color last start
+
+    ; draw lines at each y value to make it
+    ; look like a solid drawing
+    foreach ran [ y ->
+      plot-pen-up
+      plotxy 1 y
+      plot-pen-down
+      plotxy 2 y
+    ]
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -993,6 +1023,63 @@ number-of-tray-return-points
 NIL
 HORIZONTAL
 
+PLOT
+7
+199
+207
+349
+Legend
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+
+TEXTBOX
+95
+306
+245
+324
+Food
+11
+0.0
+1
+
+TEXTBOX
+93
+279
+243
+297
+Customer
+11
+0.0
+1
+
+TEXTBOX
+94
+250
+244
+268
+Cleaner
+11
+0.0
+1
+
+TEXTBOX
+93
+224
+243
+242
+Tissue
+11
+0.0
+1
+
 @#$#@#$#@
 ## WHAT IS IT?
 
@@ -1304,7 +1391,7 @@ Circle -7500403 true true 120 120 60
 tissue
 true
 0
-Rectangle -13791810 true false 75 105 225 195
+Rectangle -955883 true false 75 105 225 195
 Rectangle -1 true false 105 135 195 165
 
 tree
