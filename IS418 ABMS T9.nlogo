@@ -1,4 +1,3 @@
-
 globals [
   seats
   stalls
@@ -168,7 +167,6 @@ to create-table [input-xcor input-ycor]
     if ((pxcor = input-xcor + 1 or pxcor = input-xcor + 5) and (pycor = input-ycor + 1 or pycor = input-ycor + 3)) [
       set-seat-color
       set seats lput self seats
-
       ifelse (pxcor = input-xcor + 1) [
         set description "left-seat"
       ] [
@@ -295,7 +293,7 @@ to move-customers
       ask patch-here [
         ; place tissue packet
         sprout-tissues 1 [ ; chope using tissue
-          set size 5
+          set size 2
         ]
       ]
 
@@ -306,7 +304,6 @@ to move-customers
       if ([description] of patch-here = "right-seat") [
         set table-patch patch-at -1 0
       ]
-
       ifelse ([definition] of table-patch = "table") [
         set target one-of stalls
         set status "heading to stall"
@@ -473,7 +470,6 @@ to move-towards [destination]
       set heading 0
     ]
   ]
-
   ifelse distance target < customers-walking-speed [
     move-to target
   ] [
@@ -608,7 +604,7 @@ to spawn-food
     let y [ycor] of c
     create-foods 1 [
       setxy x y
-      set size 5
+      set size 2
       set color 45
       create-link-with c [ tie ] ; food to follow customer
     ]
@@ -632,7 +628,6 @@ end
 to occupy
   ask patch-here [set occupied? true]
 end
-
 to unoccupy
   ask patch-here [set occupied? false]
 end
@@ -700,6 +695,7 @@ to setup-legend-plot
     ]
   ]
 end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -1321,6 +1317,12 @@ Rectangle -2674135 true false 105 90 180 105
 Rectangle -2674135 true false 120 195 150 210
 Rectangle -2674135 true false 150 195 180 210
 Rectangle -2674135 true false 135 75 165 105
+Polygon -1 true false 133 90 125 90 171 90 149 118 127 91 155 102
+Rectangle -1 true false 141 91 155 103
+Polygon -1 true false 125 89 149 91 140 101 125 90 134 90
+Polygon -1 true false 60 195 89 209 129 126 96 106 59 196 68 174
+Polygon -1 true false 170 120 202 106 240 196 209 211 201 199
+Rectangle -1 true false 119 187 181 202
 
 plant
 false
