@@ -189,6 +189,9 @@ to setup-agents
 end
 
 to spawn-customers
+
+    set customers-arrival-rate  ( - log  ( 1 - random 1 + 0.01 ) 10  / customers-arrival-rate )
+
   if (random-float 1 < customers-arrival-rate) [
     create-customers 1 [
       setxy 1 31
@@ -695,7 +698,6 @@ to setup-legend-plot
     ]
   ]
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
