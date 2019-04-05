@@ -14,7 +14,7 @@ breed [ foods food ]
 breed [ tissues tissue ]
 breed [ tray-return-points tray-return-point]
 
-customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter customer-id]
+customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter customer-id reached-tray-point]
 cleaners-own [ target cleaning-duration ticks-counter ]
 foods-own [ assigned-customer-id ]
 tray-return-points-own [ nearest-tray-return-point target]
@@ -199,6 +199,7 @@ to spawn-customers
       set color 115
       set target nobody
       set status "spawned"
+      set reached-tray-point false
       set customer-id [who] of customers-here
       set satisfaction-level customers-satisfaction-level
       set patience-level customers-patience-level
@@ -368,20 +369,59 @@ to move-customers
         set ticks-counter ticks
       ]
 
+
       ; finished eating
       if (ticks = ticks-counter + customers-eating-time) [
+        let leftover-status true
+        let my-food nobody
+        let x [xcor] of customer item 0 customer-id
+        let y [ycor] of customer item 0 customer-id
         ask my-links [
-          ask one-of both-ends with [ member? self foods ] [
+          set my-food one-of both-ends with [ member? self foods ]
+          ask my-food [
             set color red
           ]
-          die  ; kill customer-food link
+          ifelse random-float 1 > probability-of-returning-leftover [
+            tie
+            ask my-food [
+              setxy x y
+              set leftover-status false
+            ]
+          ][
+            untie
+            die
+          ]
         ]
-        set-leftovers ; set patch desc to "leftovers"
-         set ticks-counter 0
+
+        ifelse leftover-status = true [
+          set-leftovers ; set patch desc to "leftovers"
+          set ticks-counter 0
+          set status "leaving"
+          set target patch 61 31 ; coords of the exit
+        ][
+          set-non-leftovers
+          set ticks-counter 0
+          set status "returning tray"
+          set target min-one-of (patches with [definition = "tray-return-point"]) [distance myself] ; coords of the exit
+        ]
+      ]
+    ]
+
+      ask customers-on patches with [definition = "tray-return-point"] [
+      if status = "returning tray" [
+        print "clearing tray"
+        ;throw-food ; kill the food when its at the tray collection point
+        ask my-links [
+          let my-food nobody
+          set my-food one-of both-ends with [ member? self foods ]
+          ask my-food [
+            die
+          ]
+        ]
         set status "leaving"
-        set target patch 61 31 ; coords of the exit
+        set target patch 61 31 ; coords of the exi
       ]
-      ]
+    ]
 
     ; exit
     if (target = patch 61 31 and [pcolor] of patch-here = 0 and xcor > 4) [
@@ -391,6 +431,17 @@ to move-customers
     move-towards target
   ]
 end
+
+;to throw-food
+  ;ask foods with [color = red][
+    ;print "reached"
+    ;ask foods-on patches with [definition = "tray-return-point"] [
+    ;  die
+    ;]
+   ; print "threw food"
+  ;]
+
+;end
 
 to queue-up-get-food
   ; move up queue
@@ -650,6 +701,19 @@ to set-leftovers
   ]
 end
 
+to set-non-leftovers
+  if ([description] of patch-here = "left-seat") [
+    ask patch-at 1 0 [
+      set definition "table"
+    ]
+  ]
+  if ([description] of patch-here = "right-seat") [
+    ask patch-at -1 0 [
+      set definition "table"
+    ]
+  ]
+end
+
 to set-table-color ; change the color of the table
   set pcolor 56
   set definition "table"
@@ -702,9 +766,9 @@ to setup-legend-plot
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-210
+209
 10
-652
+651
 453
 -1
 -1
@@ -883,13 +947,13 @@ NIL
 1
 
 SWITCH
-20
+19
 154
-191
+190
 187
 show-cleaner-vision?
 show-cleaner-vision?
-1
+0
 1
 -1000
 
@@ -902,7 +966,7 @@ cleaner-vision
 cleaner-vision
 1
 20
-10.0
+3.0
 1
 1
 NIL
@@ -1016,7 +1080,7 @@ number-of-tray-return-points
 number-of-tray-return-points
 0
 20
-3.0
+58.0
 1
 1
 NIL
