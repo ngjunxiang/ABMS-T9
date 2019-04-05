@@ -14,9 +14,9 @@ breed [ foods food ]
 breed [ tissues tissue ]
 breed [ tray-return-points tray-return-point]
 
-customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter ]
+customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter customer-id]
 cleaners-own [ target cleaning-duration ticks-counter ]
-foods-own [ customer-id ]
+foods-own [ assigned-customer-id ]
 tray-return-points-own [ nearest-tray-return-point target]
 patches-own [ definition description occupied? ]
 
@@ -199,6 +199,7 @@ to spawn-customers
       set color 115
       set target nobody
       set status "spawned"
+      set customer-id [who] of customers-here
       set satisfaction-level customers-satisfaction-level
       set patience-level customers-patience-level
       set total-number-of-customers (total-number-of-customers + 1)
@@ -609,6 +610,7 @@ to spawn-food
       setxy x y
       set size 2
       set color 45
+      set assigned-customer-id [customer-id] of c
       create-link-with c [ tie ] ; food to follow customer
     ]
   ]
