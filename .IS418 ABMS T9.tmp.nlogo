@@ -372,6 +372,7 @@ to move-customers
 
       ; finished eating
       if (ticks = ticks-counter + customers-eating-time) [
+        ;leftover-handling-with-return-probability-inplaced ; Handles the food link situation (whether to untie or not) if probability of returning leftover is > 0.
         let leftover-status true
         let my-food nobody
         let x [xcor] of customer item 0 customer-id
@@ -387,41 +388,14 @@ to move-customers
               setxy x y
               set leftover-status false
             ]
-          ][
-            untie
-            die
-          ]
+          ][ untie die ] ; else untie the food link and kill it
         ]
 
-        ifelse leftover-status = true [
-          set-leftovers ; set patch desc to "leftovers"
-          set ticks-counter 0
-          set status "leaving"
-          set target patch 61 31 ; coords of the exit
-        ][
-          set-non-leftovers
-          set ticks-counter 0
-          set status "returning tray"
-          set target min-one-of (patches with [definition = "tray-return-point"]) [distance myself] ; coords of the exit
-        ]
+        ifelse leftover-status = true [ time-to-leave-parameters ][ time-to-return-tray-parameters ]
       ]
     ]
 
-      ask customers-on patches with [definition = "tray-return-point"] [
-      if status = "returning tray" [
-        print "clearing tray"
-        ;throw-food ; kill the food when its at the tray collection point
-        ask my-links [
-          let my-food nobody
-          set my-food one-of both-ends with [ member? self foods ]
-          ask my-food [
-            die
-          ]
-        ]
-        set status "leaving"
-        set target patch 61 31 ; coords of the exi
-      ]
-    ]
+     customers-throwing-leftover ; customers done throwing their leftovers and will now leave
 
     ; exit
     if (target = patch 61 31 and [pcolor] of patch-here = 0 and xcor > 4) [
@@ -432,16 +406,40 @@ to move-customers
   ]
 end
 
-;to throw-food
-  ;ask foods with [color = red][
-    ;print "reached"
-    ;ask foods-on patches with [definition = "tray-return-point"] [
-    ;  die
-    ;]
-   ; print "threw food"
-  ;]
+to time-to-leave-parameters
+  ; settings to direct customers to the exit
+  set-leftovers ; set patch desc to "leftovers"
+  set ticks-counter 0
+  set status "leaving"
+  set target patch 61 31 ; coords of the exit
+end
 
-;end
+to time-to-return-tray-parameters
+  ; settings to direct customers to the nearest tray point to dispose their leftovers
+  set-non-leftovers
+  set ticks-counter 0
+  set status "returning tray"
+  set target min-one-of (patches with [definition = "tray-return-point"]) [distance myself] ; coords of the exit
+end
+
+to customers-throwing-leftover
+  ;for those customers done throwing their leftovers, head to the exit
+  ask customers-on patches with [definition = "tray-return-point"] [
+    if status = "returning tray" [
+      print "clearing tray"
+      ;throw-food ; kill the food when its at the tray collection point
+      ask my-links [
+        let my-food nobody
+        set my-food one-of both-ends with [ member? self foods ]
+        ask my-food [
+          die
+        ]
+      ]
+      set status "leaving"
+      set target patch 61 31 ; coords of the exi
+    ]
+  ]
+end
 
 to queue-up-get-food
   ; move up queue
@@ -908,7 +906,7 @@ probability-of-returning-leftover
 probability-of-returning-leftover
 0
 1
-0.5
+0.83
 0.01
 1
 NIL
@@ -953,7 +951,7 @@ SWITCH
 187
 show-cleaner-vision?
 show-cleaner-vision?
-0
+1
 1
 -1000
 
@@ -1080,7 +1078,7 @@ number-of-tray-return-points
 number-of-tray-return-points
 0
 20
-58.0
+62.0
 1
 1
 NIL
