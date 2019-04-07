@@ -6,6 +6,7 @@ globals [
   customers-arrival-rate
   total-number-of-customers
   number-of-trays-returned
+  number-of-tray-return-points
 ]
 
 breed [ customers customer ]
@@ -14,10 +15,9 @@ breed [ foods food ]
 breed [ tissues tissue ]
 breed [ tray-return-points tray-return-point]
 
-customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter customer-id reached-tray-point]
+customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter customer-id]
 cleaners-own [ target cleaning-duration ticks-counter ]
 foods-own [ assigned-customer-id ]
-tray-return-points-own [ nearest-tray-return-point target]
 patches-own [ definition description occupied? ]
 
 to setup
@@ -32,6 +32,35 @@ to setup
   setup-legend-plot
   spawn-cleaners
   reset-ticks
+end
+
+to setup-legend-plot
+  ; Choose correct plot
+  set-current-plot "Legend"
+  clear-plot
+
+  ; Define starting y and color
+  let starts [ [ 15 orange ] [ 12 red ] [ 9 115 ] [ 6 yellow ] [ 3 red ] ]
+
+  ; for each value in starts
+  foreach starts [ start ->
+    ; make a range of values starting at the initial
+    ; y value from 'starts'
+    let s first start
+    let f s - 2.5
+    let ran ( range s f -0.01 )
+    create-temporary-plot-pen "temp"
+    set-plot-pen-color last start
+
+    ; draw lines at each y value to make it
+    ; look like a solid drawing
+    foreach ran [ y ->
+      plot-pen-up
+      plotxy 1 y
+      plot-pen-down
+      plotxy 2 y
+    ]
+  ]
 end
 
 to test-single-customer
@@ -59,6 +88,7 @@ to setup-globals
   set stalls-queue []
   set customers-to-get-food []
   set total-number-of-customers 0
+  set number-of-tray-return-points 0
 
   ifelse (peak-hour) [
     set customers-arrival-rate 0.186076
@@ -189,18 +219,16 @@ to setup-agents
 end
 
 to spawn-customers
+  let expo-customers-arrival-rate (- ln (1 - random-float 1) / customers-arrival-rate)
 
-    set customers-arrival-rate  ( - log  ( 1 - random 1 + 0.01 ) 10  / customers-arrival-rate )
-
-  if (random-float 1 < customers-arrival-rate) [
+  if (expo-customers-arrival-rate > 1) [
     create-customers 1 [
       setxy 1 31
       set size 3
       set color 115
       set target nobody
       set status "spawned"
-      set reached-tray-point false
-      set customer-id [who] of customers-here
+      set customer-id who
       set satisfaction-level customers-satisfaction-level
       set patience-level customers-patience-level
       set total-number-of-customers (total-number-of-customers + 1)
@@ -264,6 +292,11 @@ to spawn-tray-return-points
   ]
 end
 
+to-report select-random-stall
+  let rand-index random (length stalls)
+  report item rand-index stalls
+end
+
 to move-customers
   ask customers [
     ; initialise customer
@@ -279,7 +312,7 @@ to move-customers
         ]
       ] [
         ; find a stall to buy food from
-        set target one-of stalls
+        set target select-random-stall
         set status "heading to stall"
       ]
     ]
@@ -310,7 +343,7 @@ to move-customers
         set table-patch patch-at -1 0
       ]
       ifelse ([definition] of table-patch = "table") [
-        set target one-of stalls
+        set target select-random-stall
         set status "heading to stall"
       ] [
         set status "waiting for cleaner"
@@ -329,7 +362,7 @@ to move-customers
       ]
 
       if ([definition] of table-patch = "table") [
-        set target one-of stalls
+        set target select-random-stall
         set status "heading to stall"
       ]
     ]
@@ -369,33 +402,52 @@ to move-customers
         set ticks-counter ticks
       ]
 
-
       ; finished eating
       if (ticks = ticks-counter + customers-eating-time) [
+        set ticks-counter 0
         ;leftover-handling-with-return-probability-inplaced ; Handles the food link situation (whether to untie or not) if probability of returning leftover is > 0.
         let leftover-status true
         let my-food nobody
-        let x [xcor] of customer item 0 customer-id
-        let y [ycor] of customer item 0 customer-id
+        let x xcor
+        let y ycor
         ask my-links [
           set my-food one-of both-ends with [ member? self foods ]
           ask my-food [
             set color red
           ]
-          ifelse random-float 1 > probability-of-returning-leftover [
-            tie
-            ask my-food [
-              setxy x y
-              set leftover-status false
+
+          ifelse (number-of-tray-return-points > 0) [
+            ifelse random-float 1 < probability-of-returning-leftover [ ; to change distribution. nearer the more likely?
+              tie
+              ask my-food [
+                setxy x y
+                set leftover-status false
+              ]
+            ][ ; else untie the food link and kill it
+              untie
+              die
             ]
-          ][ untie die ] ; else untie the food link and kill it
+          ] [
+            untie
+            die
+          ]
         ]
 
-        ifelse leftover-status = true [ time-to-leave-parameters ][ time-to-return-tray-parameters ]
+        ifelse leftover-status [
+          ; settings to direct customers to the exit
+          set-leftovers ; set patch desc to "leftovers"
+          set status "leaving"
+          set target patch 61 31 ; coords of the exit
+        ][
+          ; settings to direct customers to the nearest tray point to dispose their leftovers
+          set-non-leftovers
+          set status "returning tray"
+          set target min-one-of (patches with [definition = "tray-return-point"]) [distance myself] ; coords of the exit
+        ]
       ] ; end of finished eating condition
     ] ; end of "eating" condition
 
-     customers-throwing-leftover ; customers done throwing their leftovers and will now leave
+    customers-throwing-leftover ; customers done throwing their leftovers and will now leave
 
     ; exit
     if (target = patch 61 31 and [pcolor] of patch-here = 0 and xcor > 4) [
@@ -406,55 +458,36 @@ to move-customers
   ]
 end
 
-to time-to-leave-parameters
-  ; settings to direct customers to the exit
-  set-leftovers ; set patch desc to "leftovers"
-  set ticks-counter 0
-  set status "leaving"
-  set target patch 61 31 ; coords of the exit
-end
-
-to time-to-return-tray-parameters
-  ; settings to direct customers to the nearest tray point to dispose their leftovers
-  set-non-leftovers
-  set ticks-counter 0
-  set status "returning tray"
-  set target min-one-of (patches with [definition = "tray-return-point"]) [distance myself] ; coords of the exit
-end
-
 to customers-throwing-leftover
-  ;for those customers done throwing their leftovers, head to the exit
-  ask customers-on patches with [definition = "tray-return-point"] [
-    if status = "returning tray" [
-      print "clearing tray"
-      ;throw-food ; kill the food when its at the tray collection point
-      ask my-links [
-        let my-food nobody
-        set my-food one-of both-ends with [ member? self foods ]
-        ask my-food [
-          die
-        ]
+  ; for those customers done throwing their leftovers, head to the exit
+  if status = "returning tray" and [definition] of patch-here = "tray-return-point" and target = patch-here [
+    ; kill the food when its at the tray collection point
+    ask my-links [
+      ask one-of both-ends with [ member? self foods ] [
+        die
       ]
-      set status "leaving"
-      set target patch 61 31 ; coords of the exi
     ]
+    set status "leaving"
+    set target patch 61 31 ; coords of the exi
   ]
 end
 
 to queue-up-get-food
   ; move up queue
-  let stall-num 0
-  let queue-num 0
+  let stall-num nobody
+  let queue-num nobody
 
   foreach stalls-queue [ queue ->
-    if (member? target queue and patch-here = target) [
+    if (member? target queue) [
       set stall-num position queue stalls-queue
       set queue-num position target queue
-      set status "queuing"
+      if (patch-here = target) [
+        set status "queuing"
+      ]
     ]
   ]
 
-  if (status = "queuing") [
+  ifelse (status = "queuing") [
     ifelse (queue-num = 0) [
       if (ticks-counter = 0) [
         set ticks-counter ticks
@@ -484,6 +517,12 @@ to queue-up-get-food
       if (not any? customers-on next-queue-patch) [
         set target next-queue-patch
       ]
+    ]
+  ] [
+    if (status = "heading to stall" and any? customers-on target) [
+      ; reset target in queue
+      let stall-queue (item stall-num stalls-queue)
+      set target item stall-num stalls
     ]
   ]
 end
@@ -733,35 +772,6 @@ end
 to set-cleaner-vision-color
   set pcolor cyan + 4
 end
-
-to setup-legend-plot
-  ; Choose correct plot
-  set-current-plot "Legend"
-  clear-plot
-
-  ; Define starting y and color
-  let starts [ [ 10 orange ] [ 7 red ] [ 4 blue ] [ 1 yellow ] ]
-
-  ; for each value in starts
-  foreach starts [ start ->
-    ; make a range of values starting at the initial
-    ; y value from 'starts'
-    let s first start
-    let f s - 2.5
-    let ran ( range s f -0.01 )
-    create-temporary-plot-pen "temp"
-    set-plot-pen-color last start
-
-    ; draw lines at each y value to make it
-    ; look like a solid drawing
-    foreach ran [ y ->
-      plot-pen-up
-      plotxy 1 y
-      plot-pen-down
-      plotxy 2 y
-    ]
-  ]
-end
 @#$#@#$#@
 GRAPHICS-WINDOW
 209
@@ -825,7 +835,7 @@ HORIZONTAL
 SLIDER
 902
 10
-1121
+1132
 43
 customers-walking-speed
 customers-walking-speed
@@ -838,9 +848,9 @@ NIL
 HORIZONTAL
 
 SWITCH
-43
+20
 109
-166
+190
 142
 peak-hour
 peak-hour
@@ -883,9 +893,9 @@ NIL
 1
 
 SLIDER
-1138
+1154
 10
-1332
+1348
 43
 number-of-cleaners
 number-of-cleaners
@@ -915,7 +925,7 @@ HORIZONTAL
 SLIDER
 902
 53
-1122
+1133
 86
 seat-hogging-probability
 seat-hogging-probability
@@ -928,9 +938,9 @@ NIL
 HORIZONTAL
 
 BUTTON
-1138
+1154
 98
-1334
+1350
 131
 spawn-cleaner-within-area
 spawn-cleaner-within-area
@@ -956,9 +966,9 @@ show-cleaner-vision?
 -1000
 
 SLIDER
-1138
+1154
 55
-1333
+1349
 88
 cleaner-vision
 cleaner-vision
@@ -973,7 +983,7 @@ HORIZONTAL
 SLIDER
 902
 140
-1123
+1134
 173
 customers-satisfaction-level
 customers-satisfaction-level
@@ -988,7 +998,7 @@ HORIZONTAL
 SLIDER
 902
 184
-1123
+1135
 217
 customers-patience-level
 customers-patience-level
@@ -1018,9 +1028,9 @@ HORIZONTAL
 MONITOR
 667
 347
-862
+861
 392
-Number of customers in premise
+Number of Customers in Premise
 count customers
 17
 1
@@ -1031,7 +1041,7 @@ MONITOR
 291
 861
 336
-Total customers
+Total Number of Customers
 total-number-of-customers
 17
 1
@@ -1040,7 +1050,7 @@ total-number-of-customers
 SLIDER
 903
 227
-1124
+1136
 260
 customers-eating-time
 customers-eating-time
@@ -1053,9 +1063,9 @@ NIL
 HORIZONTAL
 
 BUTTON
-1140
+1154
 140
-1336
+1350
 173
 spawn-tray-return-points
 spawn-tray-return-points
@@ -1069,26 +1079,11 @@ NIL
 NIL
 1
 
-SLIDER
-904
-268
-1124
-301
-number-of-tray-return-points
-number-of-tray-return-points
-0
-20
-64.0
-1
-1
-NIL
-HORIZONTAL
-
 PLOT
-7
-199
-207
-349
+667
+106
+867
+256
 Legend
 NIL
 NIL
@@ -1102,44 +1097,76 @@ false
 PENS
 
 TEXTBOX
-95
-306
-245
-324
-Food
+737
+221
+887
+239
+Leftovers\n
 11
 0.0
 1
 
 TEXTBOX
-93
-279
-243
-297
+736
+179
+886
+197
 Customer
 11
 0.0
 1
 
 TEXTBOX
-94
-250
-244
-268
+736
+158
+886
+176
 Cleaner
 11
 0.0
 1
 
 TEXTBOX
-93
-224
-243
-242
+736
+137
+886
+155
 Tissue
 11
 0.0
 1
+
+MONITOR
+904
+289
+1100
+334
+Number of Tray Return Points
+number-of-tray-return-points
+17
+1
+11
+
+TEXTBOX
+737
+200
+887
+218
+Food\n
+11
+0.0
+1
+
+SWITCH
+20
+199
+190
+232
+use-friends
+use-friends
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
