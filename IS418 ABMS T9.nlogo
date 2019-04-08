@@ -657,7 +657,12 @@ to move-cleaner
       move-to next-patch
       occupy
     ] [
-      move-towards target
+      set target nobody
+      let next-patch one-of neighbors with [definition = "walking-path"]
+      unoccupy
+      move-to next-patch
+      occupy
+      ;move-towards target
     ]
   ]
 end
@@ -998,7 +1003,7 @@ probability-of-returning-leftover
 probability-of-returning-leftover
 0
 1
-0.83
+0.59
 0.01
 1
 NIL
@@ -1043,7 +1048,7 @@ SWITCH
 187
 show-cleaner-vision?
 show-cleaner-vision?
-1
+0
 1
 -1000
 
@@ -1101,7 +1106,7 @@ time-to-prepare-food
 time-to-prepare-food
 1
 120
-13.0
+14.0
 1
 1
 NIL
