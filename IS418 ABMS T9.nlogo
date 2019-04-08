@@ -229,7 +229,6 @@ to spawn-customers
     set target nobody
     set status "spawned"
     set eating-time floor (random-normal 13.63 3.609) * 60
-    print eating-time
     set customer-id who
     set satisfaction-level customers-satisfaction-level
     set patience-level customers-patience-level
@@ -299,14 +298,13 @@ end
 to move-customers
   ask customers [
     ; initialise customer
-    if (target = nobody) [
+    if (target = nobody and status = "spawned") [
       ifelse (to-chope?) [
         ; go and find a seat to chope
         set status "choping"
         set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
 
         if (target = nobody) [ ; no seats
-          set target one-of neighbors with [definition = "walking-path"]
           set status "looking for seat"
           ; to change
         ]
@@ -318,18 +316,19 @@ to move-customers
     ]
 
     ; seat taken before customer reaches
-    if ([definition] of target = "seat" and (any? customers-on target or any? tissues-on target) and patch-here != target and seat-choped = nobody) [
-      set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
+    if (target != nobody) [
+      if ([definition] of target = "seat" and (any? customers-on target or any? tissues-on target) and patch-here != target and seat-choped = nobody) [
+        set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
 
-      if (target = nobody) [
-        set target one-of neighbors with [definition = "walking-path"]
-        set status "looking for seat"
-        ; to change
+        if (target = nobody) [
+          set status "looking for seat"
+          ; to change
+        ]
       ]
     ]
 
     ; when customer is at his target seat
-    if (to-chope? and seat-choped = nobody and patch-here = target) [
+    if (to-chope? and seat-choped = nobody and patch-here = target and status = "choping" and [definition] of target = "seat") [
       ask patch-here [
         ; place tissue packet
         sprout-tissues 1 [ ; chope using tissue
@@ -379,7 +378,7 @@ to move-customers
         set table-patch patch-at -1 0
       ]
 
-      if ([definition] of table-patch = "table") [
+      if ([definition] of table-patch = "table" and count my-links = 0) [
         set target select-random-stall
         set status "heading to stall"
       ]
@@ -389,7 +388,9 @@ to move-customers
       set target select-queue-patch
     ]
 
-    queue-up-get-food
+    if (count my-links = 0) [
+      queue-up-get-food
+    ]
 
     if (target != nobody) [
       if ([definition] of target = "seat" and target = patch-here and count my-links > 0) [
@@ -516,6 +517,18 @@ to move-customers
       die
     ]
 
+    if (status = "looking for seat") [
+      set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
+      ifelse (target = nobody) [
+        set target one-of neighbors with [definition = "walking-path"]
+        if (target = nobody) [
+          set target min-one-of (patches with [definition = "walking-path"]) [distance myself]
+        ]
+      ] [
+        set status "heading to seat"
+      ]
+    ]
+
     move-towards target
   ]
 end
@@ -577,7 +590,7 @@ to queue-up-get-food
     ] [
       let next-queue-patch item (queue-num - 1) (item stall-num stalls-queue)
 
-      if (not any? customers-on next-queue-patch) [
+      if (count customers with [status = "queuing" and xcor = [pxcor] of next-queue-patch and ycor = [pycor] of next-queue-patch] = 0) [
         set target next-queue-patch
       ]
     ]
@@ -732,6 +745,11 @@ to-report select-queue-patch
 
   set stall-queue lput result-patch stall-queue
   set stalls-queue replace-item (position target stalls) stalls-queue stall-queue
+
+  ask result-patch [
+    set definition "queue"
+  ]
+
   report result-patch
 end
 
@@ -1083,7 +1101,7 @@ time-to-prepare-food
 time-to-prepare-food
 1
 120
-30.0
+13.0
 1
 1
 NIL
