@@ -8,6 +8,14 @@ globals [
   number-of-trays-returned
   number-of-tray-return-points
   seat-groups
+  unsatisfaction-rate
+  leftover-rate
+  seat-turnover-rate
+  total-num-food-so-far
+  total-leftovers-so-far
+  total-seats-so-far
+  total-unoccupied-seats-so-far
+  total-turnover-rate-accumulation
 ]
 
 breed [ customers customer ]
@@ -21,6 +29,7 @@ cleaners-own [ target status patch-to-clean cleaning-duration ticks-counter ]
 foods-own [ assigned-customer-id ]
 patches-own [ definition description occupied? ]
 
+
 to setup
   clear-all
 
@@ -32,6 +41,10 @@ to setup
   setup-agents
   setup-legend-plot
   spawn-cleaners
+  set total-num-food-so-far 0
+  set total-leftovers-so-far 0
+  set total-seats-so-far 0
+  set total-turnover-rate-accumulation 0
   reset-ticks
 end
 
@@ -611,6 +624,7 @@ to-report clean-empty-seat
   report one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here and [definition] of patch-at 1 0 != "leftovers" and [definition] of patch-at -1 0 != "leftovers"]
 end
 
+
 to move-towards [destination]
   unoccupy
   let my-x xcor
@@ -822,6 +836,8 @@ to go
   move-customers
   move-cleaner
   spawn-food
+  rate-of-leftover
+  rate-of-seat-turnover
   tick
 end
 
@@ -879,6 +895,67 @@ end
 to set-cleaner-vision-color
   set pcolor cyan + 4
 end
+
+;rate of unsatisfied customers per minute
+; current number of customers above x satisfaction level
+; divide it by the total number of customers currently within the premise
+to unsatisfied-rate ; currently every tick
+  let min-satisfaction-rate 30 / 2 ; 30 is the current max limit for the satisfaction-level slider
+  let num-unsatisfied-customers 0
+  let current-total-customers count customers
+  ask customers [
+    let sat-level satisfaction-level
+    if sat-level < min-satisfaction-rate [
+      set num-unsatisfied-customers ( num-unsatisfied-customers + 1 ) ; update number of unsatisfied customers
+    ]
+  ]
+  set unsatisfaction-rate (num-unsatisfied-customers / current-total-customers)
+end
+
+; rate of leftovers since start of simulation
+; get current number of leftovers
+
+to rate-of-leftover
+  let current-num-leftovers count patches with [definition = "leftovers"]
+  set total-leftovers-so-far (total-leftovers-so-far + current-num-leftovers)
+  let current-total-num-food count foods
+  set total-num-food-so-far (total-num-food-so-far + current-total-num-food)
+  ifelse total-num-food-so-far > 0 and total-leftovers-so-far > 0 [
+    set leftover-rate ((total-leftovers-so-far) / total-num-food-so-far )
+  ] [ set leftover-rate 0 ]
+end
+
+;seat turnover rate since start of simulation
+; rate of available seats
+to rate-of-seat-turnover
+
+  let current-unoccupied-seats 0
+  ask patches with [description = "right-seat" or description = "left-seat"] [
+    if occupied? = false [
+      set current-unoccupied-seats (current-unoccupied-seats + 1) ; update total current unoccupied seats
+    ]
+  ]
+
+  let total-seats 0
+  ask patches with [description = "right-seat" or description = "left-seat"] [
+    set total-seats (total-seats + 1); update total number of seats in the hawker centre.
+  ]
+
+  let current-turnover-rate 0
+  set current-turnover-rate (current-unoccupied-seats / total-seats)
+
+  set total-turnover-rate-accumulation (total-turnover-rate-accumulation + current-turnover-rate)
+  ifelse ( total-turnover-rate-accumulation > 0 and ticks > 0) [
+    set seat-turnover-rate (total-turnover-rate-accumulation / ticks)
+  ] [ set seat-turnover-rate 0 ]
+
+end
+
+
+;average time of leftovers before cleared -
+; total current duration of leftovers
+; divide by total number of leftovers
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 209
@@ -1023,7 +1100,7 @@ probability-of-returning-leftover
 probability-of-returning-leftover
 0
 1
-0.83
+0.81
 0.01
 1
 NIL
@@ -1262,18 +1339,54 @@ use-friends?
 
 SLIDER
 903
-271
+225
 1136
-304
+258
 customers-vision
 customers-vision
 1
 10
-5.0
+10.0
 1
 1
 NIL
 HORIZONTAL
+
+PLOT
+904
+272
+1134
+440
+Rate of leftovers (since start)
+Ticks
+Food
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -13791810 true "" "plot leftover-rate"
+
+PLOT
+1142
+272
+1364
+440
+Seat turnover rate (since start)
+ticks
+Seats
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -14439633 true "" "plot seat-turnover-rate"
 
 @#$#@#$#@
 ## WHAT IS IT?
