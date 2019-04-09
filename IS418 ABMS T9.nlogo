@@ -221,7 +221,7 @@ to setup-agents
 end
 
 to spawn-customers
-  let number-of-customers floor (- ln (1 - random-float 1) / customers-arrival-rate) / 10
+  let number-of-customers floor (- ln (1 - random-float 1) / customers-arrival-rate) / 12
   create-customers number-of-customers [
     setxy 1 31
     set size 3
@@ -668,10 +668,15 @@ to move-cleaner
       ifelse (ticks-counter = 0) [ ; start cleaning
         set ticks-counter ticks
         set cleaning-duration floor (random-normal 12.683 2.774)
+
+        ask patch-to-clean [
+          set description "cleaning in progress"
+        ]
       ][
         if (ticks = ticks-counter + cleaning-duration) [ ; check if cleaning is done
           ask patch-to-clean [
             set-table-color
+            set description 0
 
             ask foods-here [
               die
@@ -695,7 +700,7 @@ to move-cleaner
 end
 
 to-report detect-leftovers
-  let leftover min-one-of (patches in-radius cleaner-vision with [definition = "leftovers"]) [distance myself]
+  let leftover min-one-of (patches in-radius cleaner-vision with [definition = "leftovers" and description != "cleaning in progress"]) [distance myself]
 
   if (leftover != nobody) [
     let temp-target nobody
