@@ -17,7 +17,7 @@ breed [ tissues tissue ]
 breed [ tray-return-points tray-return-point]
 
 customers-own [ target status to-chope? seat-choped eating-time patience-level satisfaction-level ticks-counter customer-id]
-cleaners-own [ target cleaning-duration ticks-counter ]
+cleaners-own [ target status patch-to-clean cleaning-duration ticks-counter ]
 foods-own [ assigned-customer-id ]
 patches-own [ definition description occupied? ]
 
@@ -251,6 +251,8 @@ to spawn-cleaners
       set size 3
       set ticks-counter 0
       set target nobody
+      set status "roaming"
+      set patch-to-clean nobody
       occupy
     ]
   ]
@@ -266,6 +268,8 @@ to spawn-cleaner-within-area
         set ticks-counter 0
         set target nobody
         set number-of-cleaners (number-of-cleaners + 1)
+        set status "roaming"
+        set patch-to-clean nobody
         occupy
       ]
       stop
@@ -649,51 +653,58 @@ end
 to move-cleaner
   ask cleaners [ ; they can only move within the hawker's confinement
     show-cleaners-vision
-    detect-leftovers
 
-    ifelse (target = nobody) [
-      let next-patch one-of neighbors with [definition = "walking-path"]
+    if (status = "roaming") [
+      set patch-to-clean detect-leftovers
+
+      ifelse (patch-to-clean = nobody) [
+        move-to one-of neighbors with [definition = "walking-path"]
+      ] [
+        set status "cleaning"
+      ]
+    ]
+
+    if (status = "cleaning" and patch-here = target) [ ; if cleaner is beside the leftovers
+      ifelse (ticks-counter = 0) [ ; start cleaning
+        set ticks-counter ticks
+        set cleaning-duration floor (random-normal 12.683 2.774)
+      ][
+        if (ticks = ticks-counter + cleaning-duration) [ ; check if cleaning is done
+          ask patch-to-clean [
+            set-table-color
+
+            ask foods-here [
+              die
+            ]
+          ]
+
+          set target nobody
+          set patch-to-clean nobody
+          set ticks-counter 0
+          set status "roaming"
+        ]
+      ]
+    ]
+
+    if (status = "cleaning" and patch-here != target) [
       unoccupy
-      move-to next-patch
-      occupy
-    ] [
       move-towards target
+      occupy
     ]
   ]
 end
 
-to detect-leftovers
+to-report detect-leftovers
   let leftover min-one-of (patches in-radius cleaner-vision with [definition = "leftovers"]) [distance myself]
 
   if (leftover != nobody) [
-    ifelse (target = nobody) [
-      let temp-target nobody
-      ask leftover [
-        set temp-target one-of neighbors with [definition = "walking-path"] ; target walking path beside the leftovers
-      ]
-      set target temp-target
-    ] [
-      if (patch-here = target) [ ; if cleaner is beside the leftovers
-        ifelse (ticks-counter = 0) [ ; start cleaning
-          set ticks-counter ticks
-          set cleaning-duration floor (random-normal 12.683 2.774)
-        ][
-          if (ticks = ticks-counter + cleaning-duration) [ ; check if cleaning is done
-            ask leftover [
-              set-table-color
-
-              ask foods-here [
-                die
-              ]
-            ]
-
-            set target nobody
-            set ticks-counter 0
-          ]
-        ]
-      ]
+    let temp-target nobody
+    ask leftover [
+      set temp-target one-of neighbors with [definition = "walking-path"] ; target walking path beside the leftovers
     ]
+    set target temp-target
   ]
+  report leftover
 end
 
 to show-cleaners-vision
@@ -983,7 +994,7 @@ number-of-cleaners
 number-of-cleaners
 0
 20
-7.0
+5.0
 5
 1
 NIL
