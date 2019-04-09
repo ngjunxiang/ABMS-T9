@@ -692,9 +692,18 @@ to move-cleaner
     ]
 
     if (status = "cleaning" and patch-here != target) [
-      unoccupy
-      move-towards target
-      occupy
+      ifelse ([description] of patch-to-clean = "cleaning in progress") [
+        set patch-to-clean detect-leftovers
+
+        if (patch-to-clean = nobody) [
+          move-to one-of neighbors with [definition = "walking-path"]
+          set status "roaming"
+        ]
+      ] [
+        unoccupy
+        move-towards target
+        occupy
+      ]
     ]
   ]
 end
