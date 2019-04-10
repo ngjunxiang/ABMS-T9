@@ -18,7 +18,7 @@ breed [ tissues tissue ]
 breed [ tray-return-points tray-return-point]
 
 customers-own [ target status to-chope? seat-choped eating-time satisfaction-level ticks-counter customer-id waiting-time is-unsatisfied?]
-cleaners-own [ target status patch-to-clean cleaning-duration ticks-counter idling-time previous-idling-time ]
+cleaners-own [ target status patch-to-clean cleaning-duration ticks-counter idling-time previous-idling-time productivity-cost]
 foods-own [ assigned-customer-id leftover-duration ]
 patches-own [ definition description occupied? ]
 
@@ -244,6 +244,7 @@ to spawn-cleaners
         set status "roaming"
         set patch-to-clean nobody
         set idling-time 0
+        set productivity-cost 0
         occupy
         show-cleaners-vision
       ]
@@ -266,6 +267,7 @@ to spawn-cleaner-within-area
         set status "roaming"
         set patch-to-clean nobody
         set idling-time 0
+        set productivity-cost 0
         occupy
       ]
       stop
@@ -925,6 +927,7 @@ to calculate-analytics
   calculate-average-waiting-time
   calculate-leftover-duration
   calculate-cleaners-idling-time
+  calculate-productivity-cost
 end
 
 to calculate-cleaners-idling-time
@@ -957,6 +960,25 @@ to calculate-average-waiting-time
     ]
   ]
 end
+
+to calculate-productivity-cost
+
+  let unproductivity 0
+  ask cleaners with [status = "roaming"] [
+    set unproductivity (unproductivity + 1)
+  ]
+
+  ask cleaners [
+    ifelse ticks mod 60 = 0 [
+      set productivity-cost 0
+    ][
+      set productivity-cost (((count cleaners - unproductivity) / (count cleaners)) * 6)
+    ]
+  ]
+
+end
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 208
@@ -1431,6 +1453,24 @@ number-of-unsatisfied-customers
 17
 1
 11
+
+PLOT
+1106
+246
+1426
+443
+Productivity of Labor Cost
+ticks
+labor cost
+0.0
+10.0
+0.0
+6.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -15302303 true "" "plot mean [productivity-cost] of cleaners"
 
 @#$#@#$#@
 ## WHAT IS IT?
