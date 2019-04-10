@@ -16,6 +16,7 @@ globals [
   total-seats-so-far
   total-unoccupied-seats-so-far
   total-turnover-rate-accumulation
+  average-waiting-time-currently
 ]
 
 breed [ customers customer ]
@@ -24,7 +25,7 @@ breed [ foods food ]
 breed [ tissues tissue ]
 breed [ tray-return-points tray-return-point]
 
-customers-own [ target status to-chope? seat-choped eating-time patience-level satisfaction-level ticks-counter customer-id]
+customers-own [ target status to-chope? seat-choped eating-time patience-level satisfaction-level ticks-counter customer-id total-waiting-time]
 cleaners-own [ target status patch-to-clean cleaning-duration ticks-counter ]
 foods-own [ assigned-customer-id ]
 patches-own [ definition description occupied? ]
@@ -246,6 +247,7 @@ to spawn-customers
     set satisfaction-level customers-satisfaction-level
     set patience-level customers-patience-level
     set total-number-of-customers (total-number-of-customers + 1)
+    set total-waiting-time 0
     occupy
     ifelse (random-float 1 < seat-hogging-probability) [
       set to-chope? true
@@ -838,6 +840,7 @@ to go
   spawn-food
   rate-of-leftover
   rate-of-seat-turnover
+  average-waiting-time
   tick
 end
 
@@ -912,9 +915,8 @@ to unsatisfied-rate ; currently every tick
   set unsatisfaction-rate (num-unsatisfied-customers / current-total-customers)
 end
 
-; rate of leftovers since start of simulation
-; get current number of leftovers
 
+; need to redo
 to rate-of-leftover
   let current-num-leftovers count patches with [definition = "leftovers"]
   set total-leftovers-so-far (total-leftovers-so-far + current-num-leftovers)
@@ -925,8 +927,7 @@ to rate-of-leftover
   ] [ set leftover-rate 0 ]
 end
 
-;seat turnover rate since start of simulation
-; rate of available seats
+; need to change
 to rate-of-seat-turnover
 
   let current-unoccupied-seats 0
@@ -952,10 +953,26 @@ to rate-of-seat-turnover
 end
 
 
-;average time of leftovers before cleared -
-; total current duration of leftovers
-; divide by total number of leftovers
 
+to average-waiting-time
+  ; set customer variable for this to calculate
+  let total-waiting-duration-for-all-customers-waiting 0
+  ask customers with [status = "looking for seat"] [
+    set total-waiting-time (total-waiting-time + 1)
+    set total-waiting-duration-for-all-customers-waiting (total-waiting-duration-for-all-customers-waiting + total-waiting-time)
+  ]
+
+  ifelse (total-waiting-duration-for-all-customers-waiting > 0 or count customers with [status = "looking for seat"] > 0 ) [
+    set average-waiting-time-currently ( total-waiting-duration-for-all-customers-waiting / (count customers with [status = "looking for seat"]))
+  ] [ set average-waiting-time-currently 0 ]
+
+end
+
+
+; TO DO
+; seat turnover
+; average duration before leftover gets cleared
+; cleaner idling time
 @#$#@#$#@
 GRAPHICS-WINDOW
 209
@@ -1100,7 +1117,7 @@ probability-of-returning-leftover
 probability-of-returning-leftover
 0
 1
-0.81
+0.12
 0.01
 1
 NIL
@@ -1115,7 +1132,7 @@ seat-hogging-probability
 seat-hogging-probability
 0
 1
-0.5
+0.89
 0.01
 1
 NIL
@@ -1346,7 +1363,7 @@ customers-vision
 customers-vision
 1
 10
-10.0
+3.0
 1
 1
 NIL
@@ -1387,6 +1404,35 @@ false
 "" ""
 PENS
 "default" 1.0 0 -14439633 true "" "plot seat-turnover-rate"
+
+MONITOR
+33
+287
+131
+332
+looking for seat
+count customers with [status = \"looking for seat\"]
+17
+1
+11
+
+PLOT
+1063
+445
+1263
+595
+Average waiting time
+ticks
+Average waiting time
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot average-waiting-time-currently"
 
 @#$#@#$#@
 ## WHAT IS IT?

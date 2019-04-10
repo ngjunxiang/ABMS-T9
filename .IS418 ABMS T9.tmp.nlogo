@@ -6,6 +6,17 @@ globals [
   customers-arrival-rate
   total-number-of-customers
   number-of-trays-returned
+  number-of-tray-return-points
+  seat-groups
+  unsatisfaction-rate
+  leftover-rate
+  seat-turnover-rate
+  total-num-food-so-far
+  total-leftovers-so-far
+  total-seats-so-far
+  total-unoccupied-seats-so-far
+  total-turnover-rate-accumulation
+  average-waiting-time-currently
 ]
 
 breed [ customers customer ]
@@ -14,11 +25,11 @@ breed [ foods food ]
 breed [ tissues tissue ]
 breed [ tray-return-points tray-return-point]
 
-customers-own [ target status to-chope? seat-choped patience-level satisfaction-level ticks-counter customer-id reached-tray-point]
-cleaners-own [ target cleaning-duration ticks-counter ]
+customers-own [ target status to-chope? seat-choped eating-time patience-level satisfaction-level ticks-counter customer-id total-waiting-time]
+cleaners-own [ target status patch-to-clean cleaning-duration ticks-counter ]
 foods-own [ assigned-customer-id ]
-tray-return-points-own [ nearest-tray-return-point target]
 patches-own [ definition description occupied? ]
+
 
 to setup
   clear-all
@@ -31,7 +42,40 @@ to setup
   setup-agents
   setup-legend-plot
   spawn-cleaners
+  set total-num-food-so-far 0
+  set total-leftovers-so-far 0
+  set total-seats-so-far 0
+  set total-turnover-rate-accumulation 0
   reset-ticks
+end
+
+to setup-legend-plot
+  ; Choose correct plot
+  set-current-plot "Legend"
+  clear-plot
+
+  ; Define starting y and color
+  let starts [ [ 15 orange ] [ 12 red ] [ 9 115 ] [ 6 yellow ] [ 3 red ] ]
+
+  ; for each value in starts
+  foreach starts [ start ->
+    ; make a range of values starting at the initial
+    ; y value from 'starts'
+    let s first start
+    let f s - 2.5
+    let ran ( range s f -0.01 )
+    create-temporary-plot-pen "temp"
+    set-plot-pen-color last start
+
+    ; draw lines at each y value to make it
+    ; look like a solid drawing
+    foreach ran [ y ->
+      plot-pen-up
+      plotxy 1 y
+      plot-pen-down
+      plotxy 2 y
+    ]
+  ]
 end
 
 to test-single-customer
@@ -59,6 +103,8 @@ to setup-globals
   set stalls-queue []
   set customers-to-get-food []
   set total-number-of-customers 0
+  set number-of-tray-return-points 0
+  set seat-groups []
 
   ifelse (peak-hour) [
     set customers-arrival-rate 0.186076
@@ -189,29 +235,26 @@ to setup-agents
 end
 
 to spawn-customers
-
-    set customers-arrival-rate  ( - log  ( 1 - random 1 + 0.01 ) 10  / customers-arrival-rate )
-
-  if (random-float 1 < customers-arrival-rate) [
-    create-customers 1 [
-      setxy 1 31
-      set size 3
-      set color 115
-      set target nobody
-      set status "spawned"
-      set reached-tray-point false
-      set customer-id [who] of customers-here
-      set satisfaction-level customers-satisfaction-level
-      set patience-level customers-patience-level
-      set total-number-of-customers (total-number-of-customers + 1)
-      occupy
-      ifelse (random-float 1 < seat-hogging-probability) [
-        set to-chope? true
-        set seat-choped nobody
-      ] [
-        set to-chope? false
-        set seat-choped nobody
-      ]
+  let number-of-customers floor (- ln (1 - random-float 1) / customers-arrival-rate) / 12
+  create-customers number-of-customers [
+    setxy 1 31
+    set size 3
+    set color 115
+    set target nobody
+    set status "spawned"
+    set eating-time floor (random-normal 13.63 3.609) * 60
+    set customer-id who
+    set satisfaction-level customers-satisfaction-level
+    set patience-level customers-patience-level
+    set total-number-of-customers (total-number-of-customers + 1)
+    set total-waiting-time 0
+    occupy
+    ifelse (random-float 1 < seat-hogging-probability) [
+      set to-chope? true
+      set seat-choped nobody
+    ] [
+      set to-chope? false
+      set seat-choped nobody
     ]
   ]
 end
@@ -221,9 +264,10 @@ to spawn-cleaners
     sprout-cleaners 1 [ ; sprout a cleaner on
       set color red
       set size 3
-      set cleaning-duration 5
       set ticks-counter 0
       set target nobody
+      set status "roaming"
+      set patch-to-clean nobody
       occupy
     ]
   ]
@@ -236,10 +280,11 @@ to spawn-cleaner-within-area
         setxy round mouse-xcor round mouse-ycor
         set color red
         set size 3
-        set cleaning-duration 5
         set ticks-counter 0
         set target nobody
         set number-of-cleaners (number-of-cleaners + 1)
+        set status "roaming"
+        set patch-to-clean nobody
         occupy
       ]
       stop
@@ -264,37 +309,45 @@ to spawn-tray-return-points
   ]
 end
 
+to-report select-random-stall
+  let rand-index random (length stalls)
+  report item rand-index stalls
+end
+
 to move-customers
   ask customers [
     ; initialise customer
-    if (target = nobody) [
+    if (target = nobody and status = "spawned") [
       ifelse (to-chope?) [
         ; go and find a seat to chope
         set status "choping"
         set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
 
         if (target = nobody) [ ; no seats
-          set target patch 61 31 ; leave ; to change
-          set status "leaving"
+          set status "looking for seat"
+          ; to change
         ]
       ] [
         ; find a stall to buy food from
-        set target one-of stalls
+        set target select-random-stall
         set status "heading to stall"
       ]
     ]
 
     ; seat taken before customer reaches
-    if ([definition] of target = "seat" and (any? customers-on target or any? tissues-on target) and patch-here != target and seat-choped = nobody) [
-      set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
+    if (target != nobody) [
+      if ([definition] of target = "seat" and (any? customers-on target or any? tissues-on target) and patch-here != target and seat-choped = nobody) [
+        set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
 
-      if (target = nobody) [
-        set target patch 61 31 ; leave ; to change
+        if (target = nobody) [
+          set status "looking for seat"
+          ; to change
+        ]
       ]
     ]
 
     ; when customer is at his target seat
-    if (to-chope? and seat-choped = nobody and patch-here = target) [
+    if (to-chope? and seat-choped = nobody and patch-here = target and status = "choping" and [definition] of target = "seat") [
       ask patch-here [
         ; place tissue packet
         sprout-tissues 1 [ ; chope using tissue
@@ -310,11 +363,27 @@ to move-customers
         set table-patch patch-at -1 0
       ]
       ifelse ([definition] of table-patch = "table") [
-        set target one-of stalls
+        set target select-random-stall
         set status "heading to stall"
       ] [
-        set status "waiting for cleaner"
-        ; return himself?
+        ; if cleaner within vision, wait for cleaner
+        ifelse (any? cleaners in-radius customers-vision) [
+          set status "waiting for cleaner"
+        ] [
+          ; move leftovers away
+          ask foods-on table-patch [
+            let empty-table-patch patch-at 0 -1
+            ask table-patch [
+              set definition "table"
+            ]
+            move-to empty-table-patch
+            ask empty-table-patch [
+              set definition "leftovers"
+            ]
+          ]
+          set target select-random-stall
+          set status "heading to stall"
+        ]
       ]
       set seat-choped patch-here
     ]
@@ -328,8 +397,8 @@ to move-customers
         set table-patch patch-at -1 0
       ]
 
-      if ([definition] of table-patch = "table") [
-        set target one-of stalls
+      if ([definition] of table-patch = "table" and count my-links = 0) [
+        set target select-random-stall
         set status "heading to stall"
       ]
     ]
@@ -338,27 +407,74 @@ to move-customers
       set target select-queue-patch
     ]
 
-    queue-up-get-food
+    if (count my-links = 0) [
+      queue-up-get-food
+    ]
 
     if (target != nobody) [
       if ([definition] of target = "seat" and target = patch-here and count my-links > 0) [
-        let my-food nobody
-        ask my-links [
-          set my-food one-of both-ends with [ member? self foods ]
-          untie
+        let table-patch nobody
+        if ([description] of patch-here = "left-seat") [
+          set table-patch patch-at 1 0
         ]
-        ask tissues-here [ die ]
+        if ([description] of patch-here = "right-seat") [
+          set table-patch patch-at -1 0
+        ]
+        ifelse ([definition] of table-patch = "table") [
+          let my-food nobody
+          ask my-links [
+            set my-food one-of both-ends with [ member? self foods ]
+            untie
+          ]
+          ask tissues-here [ die ]
 
-        if (my-food != nobody) [
-          ask my-food [
-            if ([description] of patch-here = "left-seat") [
-              move-to patch-at 1 0
+          if (my-food != nobody) [
+            ask my-food [
+              if ([description] of patch-here = "left-seat") [
+                move-to patch-at 1 0
+              ]
+              if ([description] of patch-here = "right-seat") [
+                move-to patch-at -1 0
+              ]
             ]
-            if ([description] of patch-here = "right-seat") [
-              move-to patch-at -1 0
+            set status "eating"
+          ]
+        ] [
+          ; if cleaner within vision, wait for cleaner
+          ifelse (any? cleaners in-radius customers-vision) [
+            set status "waiting for cleaner"
+          ] [
+            ; move leftovers away
+            ask foods-on table-patch [
+              let empty-table-patch patch-at 0 -1
+              ask table-patch [
+                set definition "table"
+              ]
+              move-to empty-table-patch
+              ask empty-table-patch [
+                set definition "leftovers"
+              ]
+            ]
+
+            let my-food nobody
+            ask my-links [
+              set my-food one-of both-ends with [ member? self foods ]
+              untie
+            ]
+            ask tissues-here [ die ]
+
+            if (my-food != nobody) [
+              ask my-food [
+                if ([description] of patch-here = "left-seat") [
+                  move-to patch-at 1 0
+                ]
+                if ([description] of patch-here = "right-seat") [
+                  move-to patch-at -1 0
+                ]
+              ]
+              set status "eating"
             ]
           ]
-          set status "eating"
         ]
       ]
     ]
@@ -369,92 +485,103 @@ to move-customers
         set ticks-counter ticks
       ]
 
-
       ; finished eating
-      if (ticks = ticks-counter + customers-eating-time) [
-        ;leftover-handling-with-return-probability-inplaced ; Handles the food link situation (whether to untie or not) if probability of returning leftover is > 0.
+      if (ticks = ticks-counter + eating-time) [
+        set ticks-counter 0
         let leftover-status true
         let my-food nobody
-        let x [xcor] of customer item 0 customer-id
-        let y [ycor] of customer item 0 customer-id
+        let x xcor
+        let y ycor
         ask my-links [
           set my-food one-of both-ends with [ member? self foods ]
           ask my-food [
             set color red
           ]
-          ifelse random-float 1 > probability-of-returning-leftover [
-            tie
-            ask my-food [
-              setxy x y
-              set leftover-status false
+
+          ifelse (number-of-tray-return-points > 0) [
+            ifelse random-float 1 < probability-of-returning-leftover [ ; to change distribution. nearer the more likely?
+              ask my-food [
+                setxy x y
+                set leftover-status false
+              ]
+              tie
+            ][ ; else untie the food link and kill it
+              untie
+              die
             ]
-          ][ untie die ] ; else untie the food link and kill it
+          ] [
+            untie
+            die
+          ]
         ]
 
-        ifelse leftover-status = true [ time-to-leave-parameters ][ time-to-return-tray-parameters ]
-      ]
-    ]
+        ifelse leftover-status [
+          ; settings to direct customers to the exit
+          set-leftovers ; set patch desc to "leftovers"
+          set status "leaving"
+          set target patch 61 31 ; coords of the exit
+        ][
+          ; settings to direct customers to the nearest tray point to dispose their leftovers
+          set-non-leftovers
+          set status "returning tray"
+          set target min-one-of (patches with [definition = "tray-return-point"]) [distance myself] ; coords of the exit
+        ]
+      ] ; end of finished eating condition
+    ] ; end of "eating" condition
 
-     customers-throwing-leftover ; customers done throwing their leftovers and will now leave
+    customers-throwing-leftover ; customers done throwing their leftovers and will now leave
 
     ; exit
     if (target = patch 61 31 and [pcolor] of patch-here = 0 and xcor > 4) [
       die
     ]
 
+    if (status = "looking for seat") [
+      set target one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here]
+      ifelse (target = nobody) [
+        set target one-of neighbors with [definition = "walking-path"]
+        if (target = nobody) [
+          set target min-one-of (patches with [definition = "walking-path"]) [distance myself]
+        ]
+      ] [
+        set status "heading to seat"
+      ]
+    ]
+
     move-towards target
   ]
 end
 
-to time-to-leave-parameters
-  ; settings to direct customers to the exit
-  set-leftovers ; set patch desc to "leftovers"
-  set ticks-counter 0
-  set status "leaving"
-  set target patch 61 31 ; coords of the exit
-end
-
-to time-to-return-tray-parameters
-  ; settings to direct customers to the nearest tray point to dispose their leftovers
-  set-non-leftovers
-  set ticks-counter 0
-  set status "returning tray"
-  set target min-one-of (patches with [definition = "tray-return-point"]) [distance myself] ; coords of the exit
-end
-
 to customers-throwing-leftover
-  ;for those customers done throwing their leftovers, head to the exit
-  ask customers-on patches with [definition = "tray-return-point"] [
-    if status = "returning tray" [
-      print "clearing tray"
-      ;throw-food ; kill the food when its at the tray collection point
-      ask my-links [
-        let my-food nobody
-        set my-food one-of both-ends with [ member? self foods ]
-        ask my-food [
-          die
-        ]
+  ; for those customers done throwing their leftovers, head to the exit
+  if status = "returning tray" and [definition] of patch-here = "tray-return-point" and target = patch-here [
+    ; kill the food when its at the tray collection point
+    ask my-links [
+      ask one-of both-ends with [ member? self foods ] [
+        die
       ]
-      set status "leaving"
-      set target patch 61 31 ; coords of the exi
     ]
+    set status "leaving"
+    set target patch 61 31 ; coords of the exi
   ]
 end
 
 to queue-up-get-food
   ; move up queue
-  let stall-num 0
-  let queue-num 0
+  let stall-num nobody
+  let queue-num nobody
 
   foreach stalls-queue [ queue ->
-    if (member? target queue and patch-here = target) [
+    if (member? target queue) [
       set stall-num position queue stalls-queue
       set queue-num position target queue
-      set status "queuing"
+      if (patch-here = target) [
+        set status "queuing"
+      ]
     ]
   ]
 
-  if (status = "queuing") [
+  ifelse (status = "queuing") [
     ifelse (queue-num = 0) [
       if (ticks-counter = 0) [
         set ticks-counter ticks
@@ -469,9 +596,10 @@ to queue-up-get-food
           set status "heading to seat"
 
           if (target = nobody) [
-            set target patch 61 31 ; to change
+            set target one-of neighbors with [definition = "walking-path"]
             set status "looking for seat"
             ; wait until there is a seat
+            ; to change
           ]
         ] [
           set target seat-choped
@@ -481,16 +609,23 @@ to queue-up-get-food
     ] [
       let next-queue-patch item (queue-num - 1) (item stall-num stalls-queue)
 
-      if (not any? customers-on next-queue-patch) [
+      if (count customers with [status = "queuing" and xcor = [pxcor] of next-queue-patch and ycor = [pycor] of next-queue-patch] = 0) [
         set target next-queue-patch
       ]
+    ]
+  ] [
+    if (status = "heading to stall" and any? customers-on target) [
+      ; reset target in queue
+      let stall-queue (item stall-num stalls-queue)
+      set target item stall-num stalls
     ]
   ]
 end
 
 to-report clean-empty-seat
-  report one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here and [definition] of patch-at 1 0 != "leftovers" and [definition] of patch-at 1 0 != "leftovers"]
+  report one-of patches with [definition = "seat" and not any? tissues-here and not any? customers-here and [definition] of patch-at 1 0 != "leftovers" and [definition] of patch-at -1 0 != "leftovers"]
 end
+
 
 to move-towards [destination]
   unoccupy
@@ -534,50 +669,72 @@ end
 to move-cleaner
   ask cleaners [ ; they can only move within the hawker's confinement
     show-cleaners-vision
-    detect-leftovers
 
-    ifelse (target = nobody) [
-      let next-patch one-of neighbors with [definition = "walking-path"]
-      unoccupy
-      move-to next-patch
-      occupy
-    ] [
-      move-towards target
+    if (status = "roaming") [
+      set patch-to-clean detect-leftovers
+
+      ifelse (patch-to-clean = nobody) [
+        move-to one-of neighbors with [definition = "walking-path"]
+      ] [
+        set status "cleaning"
+      ]
+    ]
+
+    if (status = "cleaning" and patch-here = target) [ ; if cleaner is beside the leftovers
+      ifelse (ticks-counter = 0) [ ; start cleaning
+        set ticks-counter ticks
+        set cleaning-duration floor (random-normal 12.683 2.774)
+
+        ask patch-to-clean [
+          set description "cleaning in progress"
+        ]
+      ][
+        if (ticks = ticks-counter + cleaning-duration) [ ; check if cleaning is done
+          ask patch-to-clean [
+            set-table-color
+            set description 0
+
+            ask foods-here [
+              die
+            ]
+          ]
+
+          set target nobody
+          set patch-to-clean nobody
+          set ticks-counter 0
+          set status "roaming"
+        ]
+      ]
+    ]
+
+    if (status = "cleaning" and patch-here != target) [
+      ifelse ([description] of patch-to-clean = "cleaning in progress") [
+        set patch-to-clean detect-leftovers
+
+        if (patch-to-clean = nobody) [
+          move-to one-of neighbors with [definition = "walking-path"]
+          set status "roaming"
+        ]
+      ] [
+        unoccupy
+        move-towards target
+        occupy
+      ]
     ]
   ]
 end
 
-to detect-leftovers
-  let leftover min-one-of (patches in-radius cleaner-vision with [definition = "leftovers"]) [distance myself]
+to-report detect-leftovers
+  let leftover min-one-of (patches in-radius cleaner-vision with [definition = "leftovers" and description != "cleaning in progress"]) [distance myself]
 
   if (leftover != nobody) [
-    ifelse (target = nobody) [
-      let temp-target nobody
-      ask leftover [
-        set temp-target one-of neighbors with [definition = "walking-path"] ; target walking path beside the leftovers
-      ]
-      set target temp-target
-    ] [
-      if (patch-here = target) [ ; if cleaner is beside the leftovers
-        ifelse (ticks-counter = 0) [ ; start cleaning
-          set ticks-counter ticks
-        ][
-          if (ticks = ticks-counter + cleaning-duration) [ ; check if cleaning is done
-            ask leftover [
-              set-table-color
-
-              ask foods-here [
-                die
-              ]
-            ]
-
-            set target nobody
-            set ticks-counter 0
-          ]
-        ]
-      ]
+    let temp-target nobody
+    ask leftover [
+      set temp-target one-of neighbors with [definition = "walking-path"] ; target walking path beside the leftovers
     ]
+    set target temp-target
   ]
+  report leftover
 end
 
 to show-cleaners-vision
@@ -629,6 +786,11 @@ to-report select-queue-patch
 
   set stall-queue lput result-patch stall-queue
   set stalls-queue replace-item (position target stalls) stalls-queue stall-queue
+
+  ask result-patch [
+    set definition "queue"
+  ]
+
   report result-patch
 end
 
@@ -676,6 +838,9 @@ to go
   move-customers
   move-cleaner
   spawn-food
+  rate-of-leftover
+  rate-of-seat-turnover
+  average-waiting-time
   tick
 end
 
@@ -734,34 +899,80 @@ to set-cleaner-vision-color
   set pcolor cyan + 4
 end
 
-to setup-legend-plot
-  ; Choose correct plot
-  set-current-plot "Legend"
-  clear-plot
-
-  ; Define starting y and color
-  let starts [ [ 10 orange ] [ 7 red ] [ 4 blue ] [ 1 yellow ] ]
-
-  ; for each value in starts
-  foreach starts [ start ->
-    ; make a range of values starting at the initial
-    ; y value from 'starts'
-    let s first start
-    let f s - 2.5
-    let ran ( range s f -0.01 )
-    create-temporary-plot-pen "temp"
-    set-plot-pen-color last start
-
-    ; draw lines at each y value to make it
-    ; look like a solid drawing
-    foreach ran [ y ->
-      plot-pen-up
-      plotxy 1 y
-      plot-pen-down
-      plotxy 2 y
+;rate of unsatisfied customers per minute
+; current number of customers above x satisfaction level
+; divide it by the total number of customers currently within the premise
+to unsatisfied-rate ; currently every tick
+  let min-satisfaction-rate 30 / 2 ; 30 is the current max limit for the satisfaction-level slider
+  let num-unsatisfied-customers 0
+  let current-total-customers count customers
+  ask customers [
+    let sat-level satisfaction-level
+    if sat-level < min-satisfaction-rate [
+      set num-unsatisfied-customers ( num-unsatisfied-customers + 1 ) ; update number of unsatisfied customers
     ]
   ]
+  set unsatisfaction-rate (num-unsatisfied-customers / current-total-customers)
 end
+
+
+; need to redo
+to rate-of-leftover
+  let current-num-leftovers count patches with [definition = "leftovers"]
+  set total-leftovers-so-far (total-leftovers-so-far + current-num-leftovers)
+  let current-total-num-food count foods
+  set total-num-food-so-far (total-num-food-so-far + current-total-num-food)
+  ifelse total-num-food-so-far > 0 and total-leftovers-so-far > 0 [
+    set leftover-rate ((total-leftovers-so-far) / total-num-food-so-far )
+  ] [ set leftover-rate 0 ]
+end
+
+; need to change
+to rate-of-seat-turnover
+
+  let current-unoccupied-seats 0
+  ask patches with [description = "right-seat" or description = "left-seat"] [
+    if occupied? = false [
+      set current-unoccupied-seats (current-unoccupied-seats + 1) ; update total current unoccupied seats
+    ]
+  ]
+
+  let total-seats 0
+  ask patches with [description = "right-seat" or description = "left-seat"] [
+    set total-seats (total-seats + 1); update total number of seats in the hawker centre.
+  ]
+
+  let current-turnover-rate 0
+  set current-turnover-rate (current-unoccupied-seats / total-seats)
+
+  set total-turnover-rate-accumulation (total-turnover-rate-accumulation + current-turnover-rate)
+  ifelse ( total-turnover-rate-accumulation > 0 and ticks > 0) [
+    set seat-turnover-rate (total-turnover-rate-accumulation / ticks)
+  ] [ set seat-turnover-rate 0 ]
+
+end
+
+
+
+to average-waiting-time
+  ; set customer variable for this to calculate
+  let total-waiting-duration-for-all-customers-waiting 0
+  ask customers with [status = "looking for seat"] [
+    set total-waiting-time (total-waiting-time + 1)
+    set total-waiting-duration-for-all-customers-waiting (total-waiting-duration-for-all-customers-waiting + total-waiting-time)
+  ]
+
+  ifelse (total-waiting-duration-for-all-customers-waiting > 0 or count customers with [status = "looking for seat"] > 0 ) [
+    set average-waiting-time-currently ( total-waiting-duration-for-all-customers-waiting / (count customers with [status = "looking for seat"]))
+  ] [ set average-waiting-time-currently 0 ]
+
+end
+
+
+; TO DO
+; seat turnover
+; average duration before leftover gets cleared
+; c
 @#$#@#$#@
 GRAPHICS-WINDOW
 209
@@ -825,7 +1036,7 @@ HORIZONTAL
 SLIDER
 902
 10
-1121
+1132
 43
 customers-walking-speed
 customers-walking-speed
@@ -838,13 +1049,13 @@ NIL
 HORIZONTAL
 
 SWITCH
-43
+20
 109
-166
+190
 142
 peak-hour
 peak-hour
-1
+0
 1
 -1000
 
@@ -883,15 +1094,15 @@ NIL
 1
 
 SLIDER
-1138
+1154
 10
-1332
+1348
 43
 number-of-cleaners
 number-of-cleaners
 0
 20
-6.0
+5.0
 5
 1
 NIL
@@ -906,7 +1117,7 @@ probability-of-returning-leftover
 probability-of-returning-leftover
 0
 1
-0.83
+0.12
 0.01
 1
 NIL
@@ -915,22 +1126,22 @@ HORIZONTAL
 SLIDER
 902
 53
-1122
+1133
 86
 seat-hogging-probability
 seat-hogging-probability
 0
 1
-0.5
+0.89
 0.01
 1
 NIL
 HORIZONTAL
 
 BUTTON
-1138
+1154
 98
-1334
+1350
 131
 spawn-cleaner-within-area
 spawn-cleaner-within-area
@@ -956,15 +1167,15 @@ show-cleaner-vision?
 -1000
 
 SLIDER
-1138
+1154
 55
-1333
+1349
 88
 cleaner-vision
 cleaner-vision
 1
 20
-3.0
+5.0
 1
 1
 NIL
@@ -973,7 +1184,7 @@ HORIZONTAL
 SLIDER
 902
 140
-1123
+1134
 173
 customers-satisfaction-level
 customers-satisfaction-level
@@ -988,7 +1199,7 @@ HORIZONTAL
 SLIDER
 902
 184
-1123
+1135
 217
 customers-patience-level
 customers-patience-level
@@ -1009,7 +1220,7 @@ time-to-prepare-food
 time-to-prepare-food
 1
 120
-30.0
+13.0
 1
 1
 NIL
@@ -1018,9 +1229,9 @@ HORIZONTAL
 MONITOR
 667
 347
-862
+861
 392
-Number of customers in premise
+Number of Customers in Premise
 count customers
 17
 1
@@ -1031,31 +1242,16 @@ MONITOR
 291
 861
 336
-Total customers
+Total Number of Customers
 total-number-of-customers
 17
 1
 11
 
-SLIDER
-903
-227
-1124
-260
-customers-eating-time
-customers-eating-time
-30
-1200
-600.0
-1
-1
-NIL
-HORIZONTAL
-
 BUTTON
-1140
+1154
 140
-1336
+1350
 173
 spawn-tray-return-points
 spawn-tray-return-points
@@ -1069,26 +1265,11 @@ NIL
 NIL
 1
 
-SLIDER
-904
-268
-1124
-301
-number-of-tray-return-points
-number-of-tray-return-points
-0
-20
-62.0
-1
-1
-NIL
-HORIZONTAL
-
 PLOT
-7
-199
-207
-349
+667
+106
+867
+256
 Legend
 NIL
 NIL
@@ -1102,44 +1283,156 @@ false
 PENS
 
 TEXTBOX
-95
-306
-245
-324
-Food
+737
+221
+887
+239
+Leftovers\n
 11
 0.0
 1
 
 TEXTBOX
-93
-279
-243
-297
+736
+179
+886
+197
 Customer
 11
 0.0
 1
 
 TEXTBOX
-94
-250
-244
-268
+736
+158
+886
+176
 Cleaner
 11
 0.0
 1
 
 TEXTBOX
-93
-224
-243
-242
+736
+137
+886
+155
 Tissue
 11
 0.0
 1
+
+MONITOR
+667
+404
+861
+449
+Number of Tray Return Points
+number-of-tray-return-points
+17
+1
+11
+
+TEXTBOX
+737
+200
+887
+218
+Food\n
+11
+0.0
+1
+
+SWITCH
+19
+199
+189
+232
+use-friends?
+use-friends?
+1
+1
+-1000
+
+SLIDER
+903
+225
+1136
+258
+customers-vision
+customers-vision
+1
+10
+3.0
+1
+1
+NIL
+HORIZONTAL
+
+PLOT
+904
+272
+1134
+440
+Rate of leftovers (since start)
+Ticks
+Food
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -13791810 true "" "plot leftover-rate"
+
+PLOT
+1142
+272
+1364
+440
+Seat turnover rate (since start)
+ticks
+Seats
+0.0
+10.0
+0.0
+1.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -14439633 true "" "plot seat-turnover-rate"
+
+MONITOR
+33
+287
+131
+332
+looking for seat
+count customers with [status = \"looking for seat\"]
+17
+1
+11
+
+PLOT
+1063
+445
+1263
+595
+Average waiting time
+ticks
+Average waiting time
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot average-waiting-time-currently"
 
 @#$#@#$#@
 ## WHAT IS IT?
