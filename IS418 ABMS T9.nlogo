@@ -685,10 +685,10 @@ to move-cleaner
       set patch-to-clean detect-leftovers
 
       ifelse (patch-to-clean = nobody) [
-        let walking-path one-of neighbors with [definition = "walking-path"]
+        let walking-path one-of neighbors with [definition = "walking-path" or definition = "queue"]
 
         ifelse (walking-path = nobody) [
-          move-to min-one-of (patches with [definition = "walking-path"]) [distance myself]
+          move-to min-one-of (patches with [definition = "walking-path" or definition = "queue"]) [distance myself]
         ] [
           move-to walking-path
         ]
@@ -729,10 +729,10 @@ to move-cleaner
         set patch-to-clean detect-leftovers
 
         if (patch-to-clean = nobody) [
-          let walking-path one-of neighbors with [definition = "walking-path"]
+          let walking-path one-of neighbors with [definition = "walking-path" or definition = "queue"]
 
           ifelse (walking-path = nobody) [
-            move-to min-one-of (patches with [definition = "walking-path"]) [distance myself]
+            move-to min-one-of (patches with [definition = "walking-path" or definition = "queue"]) [distance myself]
           ] [
             move-to walking-path
           ]
@@ -753,7 +753,7 @@ to-report detect-leftovers
   if (leftover != nobody) [
     let temp-target nobody
     ask leftover [
-      set temp-target one-of neighbors with [definition = "walking-path"] ; target walking path beside the leftovers
+      set temp-target one-of neighbors with [definition = "walking-path" or definition = "queue"] ; target walking path beside the leftovers
     ]
     set target temp-target
   ]
@@ -1086,7 +1086,7 @@ number-of-cleaners
 number-of-cleaners
 0
 20
-7.0
+8.0
 5
 1
 NIL
@@ -1146,7 +1146,7 @@ SWITCH
 187
 show-cleaner-vision?
 show-cleaner-vision?
-1
+0
 1
 -1000
 
