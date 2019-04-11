@@ -8,7 +8,6 @@ globals [
   number-of-trays-returned
   number-of-tray-return-points
   number-of-unsatisfied-customers
-  seat-groups
 ]
 
 breed [ customers customer ]
@@ -75,7 +74,6 @@ to setup-globals
   set total-number-of-customers 0
   set number-of-tray-return-points 0
   set number-of-unsatisfied-customers 0
-  set seat-groups []
 
   ifelse (peak-hour) [
     set customers-arrival-rate 0.168056
@@ -1473,7 +1471,7 @@ SWITCH
 229
 enable-seat-hogging?
 enable-seat-hogging?
-1
+0
 1
 -1000
 
