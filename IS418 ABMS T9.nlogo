@@ -205,7 +205,7 @@ to setup-agents
 end
 
 to spawn-customers
-  let number-of-customers floor (- ln (1 - random-float 1) / customers-arrival-rate) / 11
+  let number-of-customers floor (- ln (1 - random-float 1) / customers-arrival-rate) / 12
   create-customers number-of-customers [
     setxy 1 31
     set size 3
@@ -354,6 +354,10 @@ to move-customers
         set target select-random-stall
         set status "heading to stall"
       ] [
+        set satisfaction-level (satisfaction-level - count foods-on table-patch)
+
+        if (satisfaction-level < 0) [ set satisfaction-level 0 ]
+
         ; if cleaner within vision, wait for cleaner
         ifelse (any? cleaners in-radius customers-vision) [
           set status "waiting for cleaner"
@@ -372,7 +376,6 @@ to move-customers
           set target select-random-stall
           set status "heading to stall"
         ]
-        set satisfaction-level (satisfaction-level - 1)
       ]
       set seat-choped patch-here
     ]
@@ -430,6 +433,10 @@ to move-customers
             set status "eating"
           ]
         ] [
+          set satisfaction-level (satisfaction-level - count foods-on table-patch)
+
+          if (satisfaction-level < 0) [ set satisfaction-level 0 ]
+
           ; if cleaner within vision, wait for cleaner
           ifelse (any? cleaners in-radius customers-vision) [
             set status "waiting for cleaner"
@@ -445,7 +452,6 @@ to move-customers
                 set definition "leftovers"
               ]
             ]
-            set satisfaction-level (satisfaction-level - 1)
 
             let my-food nobody
             ask my-links [
@@ -1067,7 +1073,7 @@ SWITCH
 142
 peak-hour
 peak-hour
-1
+0
 1
 -1000
 
@@ -1114,7 +1120,7 @@ number-of-cleaners
 number-of-cleaners
 0
 20
-7.0
+5.0
 1
 1
 NIL
@@ -1349,7 +1355,7 @@ customers-vision
 customers-vision
 1
 10
-1.0
+5.0
 1
 1
 NIL
@@ -1474,7 +1480,7 @@ SWITCH
 229
 enable-seat-hogging?
 enable-seat-hogging?
-0
+1
 1
 -1000
 
@@ -1497,10 +1503,10 @@ PENS
 "default" 1.0 0 -16777216 true "" "if (count customers > 0 ) [\n  plot mean [satisfaction-level] of customers\n]"
 
 MONITOR
-883
-406
-1041
-451
+873
+405
+1070
+450
 Average Satisfaction Rate
 mean [satisfaction-level] of customers
 17
@@ -1510,9 +1516,9 @@ mean [satisfaction-level] of customers
 PLOT
 625
 697
-928
-924
-Cost analysis
+927
+921
+Cost Analysis
 NIL
 NIL
 0.0
@@ -1527,15 +1533,33 @@ PENS
 "Return Point" 1.0 0 -7500403 true "" "if number-of-trays-returned > 0 and number-of-tray-return-points > 0 [\n  plot number-of-trays-returned / (( 400 * number-of-tray-return-points) + ( number-of-tray-return-points / 60 / 60 / 14 / 30 * ticks))\n]"
 
 MONITOR
-1098
-293
-1250
-338
-NIL
+1084
+292
+1297
+337
+Number of Trays Cleared by Cleaners
 number-of-cleaned-trays
 17
 1
 11
+
+PLOT
+934
+698
+1239
+921
+Number of Unsatisfied Customers
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot number-of-unsatisfied-customers"
 
 @#$#@#$#@
 ## WHAT IS IT?
