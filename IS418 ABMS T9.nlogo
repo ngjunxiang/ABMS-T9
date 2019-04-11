@@ -8,6 +8,7 @@ globals [
   number-of-trays-returned
   number-of-tray-return-points
   number-of-unsatisfied-customers
+  number-of-cleaned-trays
 ]
 
 breed [ customers customer ]
@@ -74,7 +75,7 @@ to setup-globals
   set total-number-of-customers 0
   set number-of-tray-return-points 0
   set number-of-unsatisfied-customers 0
-
+  set number-of-cleaned-trays 0
   ifelse (peak-hour) [
     set customers-arrival-rate 0.168056
   ] [
@@ -716,6 +717,7 @@ to move-cleaner
           ask patch-to-clean [
             set-table-color
             set description 0
+            set number-of-cleaned-trays number-of-cleaned-trays + count foods-here
 
             ask foods-here [
               die
@@ -870,6 +872,8 @@ to go
 
   calculate-analytics
   tick
+  ;if ticks > 5000 [stop]
+
 end
 
 to occupy
@@ -981,7 +985,6 @@ to calculate-productivity-cost
   ]
 
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 208
@@ -1064,7 +1067,7 @@ SWITCH
 142
 peak-hour
 peak-hour
-0
+1
 1
 -1000
 
@@ -1111,8 +1114,8 @@ number-of-cleaners
 number-of-cleaners
 0
 20
-8.0
-5
+7.0
+1
 1
 NIL
 HORIZONTAL
@@ -1346,7 +1349,7 @@ customers-vision
 customers-vision
 1
 10
-5.0
+1.0
 1
 1
 NIL
@@ -1492,6 +1495,47 @@ false
 "" ""
 PENS
 "default" 1.0 0 -16777216 true "" "if (count customers > 0 ) [\n  plot mean [satisfaction-level] of customers\n]"
+
+MONITOR
+883
+406
+1041
+451
+Average Satisfaction Rate
+mean [satisfaction-level] of customers
+17
+1
+11
+
+PLOT
+625
+697
+928
+924
+Cost analysis
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Cleaner" 1.0 0 -16777216 true "" "if number-of-cleaned-trays > 0 [\n  plot number-of-cleaned-trays / ( 1500 * number-of-cleaners / 60 / 60 / 14 / 30 * ticks )\n]"
+"Return Point" 1.0 0 -7500403 true "" "if number-of-trays-returned > 0 and number-of-tray-return-points > 0 [\n  plot number-of-trays-returned / (( 400 * number-of-tray-return-points) + ( number-of-tray-return-points / 60 / 60 / 14 / 30 * ticks))\n]"
+
+MONITOR
+1098
+293
+1250
+338
+NIL
+number-of-cleaned-trays
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
