@@ -221,9 +221,15 @@ to spawn-customers
     set is-unsatisfied? false
 
     occupy
-    ifelse (random-float 1 < seat-hogging-probability) [
-      set to-chope? true
-      set seat-choped nobody
+
+    ifelse (enable-seat-hogging? = true) [
+      ifelse (random-float 1 < seat-hogging-probability) [
+        set to-chope? true
+        set seat-choped nobody
+      ] [
+        set to-chope? false
+        set seat-choped nobody
+      ]
     ] [
       set to-chope? false
       set seat-choped nobody
@@ -475,7 +481,7 @@ to move-customers
       if (ticks = ticks-counter + eating-time) [
         set ticks-counter 0
         let leftover-status true
-        let has-tray-return-point any? patches in-radius 20 with [definition = "tray-return-point"]
+        let has-tray-return-point any? patches in-radius (2 * customers-vision) with [definition = "tray-return-point"]
         let my-food nobody
         let x xcor
         let y ycor
@@ -978,7 +984,6 @@ to calculate-productivity-cost
 
 end
 
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 208
@@ -1168,7 +1173,7 @@ SWITCH
 187
 show-cleaner-vision?
 show-cleaner-vision?
-0
+1
 1
 -1000
 
@@ -1334,17 +1339,6 @@ Food\n
 0.0
 1
 
-SWITCH
-19
-199
-189
-232
-use-friends?
-use-friends?
-1
-1
--1000
-
 SLIDER
 902
 184
@@ -1455,10 +1449,10 @@ number-of-unsatisfied-customers
 11
 
 PLOT
-1106
-246
-1426
-443
+3
+697
+308
+921
 Productivity of Labor Cost
 ticks
 labor cost
@@ -1471,6 +1465,35 @@ false
 "" ""
 PENS
 "default" 1.0 0 -15302303 true "" "plot mean [productivity-cost] of cleaners"
+
+SWITCH
+19
+196
+190
+229
+enable-seat-hogging?
+enable-seat-hogging?
+1
+1
+-1000
+
+PLOT
+314
+697
+618
+920
+Average Customer Satisfaction
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "if (count customers > 0 ) [\n  plot mean [satisfaction-level] of customers\n]"
 
 @#$#@#$#@
 ## WHAT IS IT?
